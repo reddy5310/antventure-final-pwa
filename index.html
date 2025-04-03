@@ -37,7 +37,7 @@
 
   <div id="overlay">
     <p>The ant has fallen onto a drifting banana leaf!</p>
-    <p>Guide it to dodge the rain on the flowing river!</p>
+    <p>Guide it by touching or dragging to dodge the rain!</p>
     <button onclick="startIntro()">Continue</button>
   </div>
 
@@ -88,11 +88,11 @@
 
     function drawLeaf() {
       leaf.drift += 0.02;
-      leaf.x = W / 2 + Math.sin(leaf.drift) * 30;
+      const tilt = Math.sin(leaf.drift) * 0.05;
 
       ctx.save();
       ctx.translate(leaf.x, leaf.y);
-      ctx.rotate(Math.sin(leaf.drift) * 0.05);
+      ctx.rotate(tilt);
       ctx.fillStyle = "#6b8e23";
       ctx.beginPath();
       ctx.ellipse(0, 0, 80, 20, 0, 0, Math.PI * 2);
@@ -161,6 +161,19 @@
       document.getElementById("rain").play();
       requestAnimationFrame(gameLoop);
     }
+
+    // Input control
+    canvas.addEventListener("touchmove", (e) => {
+      if (!running) return;
+      const touch = e.touches[0];
+      leaf.x = touch.clientX;
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener("mousemove", (e) => {
+      if (!running) return;
+      leaf.x = e.clientX;
+    });
 
     window.addEventListener('resize', resize);
     window.addEventListener('load', resize);
