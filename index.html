@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antventure: Leaf of Fate</title>
+  <link rel="manifest" href="manifest.json" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker Registered'));
+    }
+  </script>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100vw; height: 100vh;
+      background: #1e3d59;
+      font-family: 'Press Start 2P', cursive;
+      overflow: hidden;
+    }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #overlay, #titleScreen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85); color: white;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10;
+    }
+    button {
+      margin-top: 20px; padding: 10px 20px; font-size: 14px;
+      background: #00cec9; border: none; border-radius: 10px; color: white;
+      font-family: 'Press Start 2P', cursive; cursor: pointer;
+    }
+    #scoreDisplay {
+      position: absolute; top: 10px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6); color: white;
+      padding: 10px 20px; font-size: 12px; border-radius: 10px;
+      z-index: 5; display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="overlay">
+    <p>The ant has fallen onto a drifting banana leaf!</p>
+    <p>Guide it to dodge the rain on the flowing river!</p>
+    <button onclick="startIntro()">Continue</button>
+  </div>
+  <div id="titleScreen" style="display: none;">
+    <h1>ANTVENTURE</h1>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+  <div id="scoreDisplay">Score: 0</div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W = 1, H = 1, canvasReady = false;
+    let leaf = { x: 200, y: 400, width: 150, height: 50 };
+    let ant = { radius: 12 };
+    let raindrops = [], score = 0;
+    let gameRunning = false;
+
+    function resize() {
+      W = Math.max(window.innerWidth, 1);
+      H = Math.max(window.innerHeight, 1);
+      canvas.width = W;
+      canvas.height = H;
+      leaf.x = W / 2;
+      leaf.y = H * 0.7;
+      canvasReady = true;
+    }
+
+    function drawWaterFlow() {
+      if (!canvasReady || !isFinite(H) || H <= 0) return;
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#3a7bd5');
+      grad.addColorStop(1, '#00d2ff');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 20; i++) {
+        let y = (i * 30 + (Date.now() / 30) % 30);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y + Math.sin(i + Date.now() / 500) * 5);
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.stroke();
+      }
+    }
+
+    function drawLeaf() {
+      ctx.save();
+      ctx.translate(leaf.x, leaf.y);
+      ctx.fillStyle = '#6b8e23';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, leaf.width / 2, leaf.height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawAnt() {
+      const x = leaf.x;
+      const y = leaf.y - 10;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = '#3e2723';
+      ctx.beginPath(); ctx.ellipse(0, 0, 7, 10, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, -12, 5, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, 12, 6, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#3e2723'; ctx.lineWidth = 1;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.moveTo(-8, i * 6); ctx.lineTo(-16, i * 6 - 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(8, i * 6); ctx.lineTo(16, i * 6 - 4); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawRain() {
+      if (Math.random() < 0.03) raindrops.push({ x: Math.random() * W, y: 0, speed: 2 + Math.random() * 1 });
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
+      for (let i = raindrops.length - 1; i >= 0; i--) {
+        const r = raindrops[i];
+        ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x, r.y + 10); ctx.stroke();
+        r.y += r.speed;
+        if (r.y > H) raindrops.splice(i, 1);
+        const ax = leaf.x, ay = leaf.y - 10;
+        if (Math.abs(r.x - ax) < 12 && Math.abs(r.y - ay) < 12) {
+          gameRunning = false;
+          alert("Game Over! Final Score: " + score);
+          location.reload();
+        }
+      }
+    }
+
+    function gameLoop() {
+      if (!gameRunning || !canvasReady) return;
+      ctx.clearRect(0, 0, W, H);
+      drawWaterFlow(); drawLeaf(); drawAnt(); drawRain();
+      score++;
+      document.getElementById('scoreDisplay').innerText = "Score: " + score;
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 0 && gameRunning) {
+        leaf.x = e.touches[0].clientX;
+      }
+    });
+
+    function startIntro() {
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('titleScreen').style.display = 'flex';
+    }
+
+    function startGame() {
+      document.getElementById('titleScreen').style.display = 'none';
+      document.getElementById('scoreDisplay').style.display = 'block';
+      resize();
+      if (!canvasReady) { setTimeout(startGame, 100); return; }
+      gameRunning = true;
+      score = 0; raindrops = [];
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.addEventListener('load', resize);
+    window.addEventListener('resize', resize);
+  </script>
+</body>
+</html>
