@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antventure: Leaf of Fate</title>
+  <title>Antventure: Realistic Leaf Edition</title>
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -36,8 +36,8 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="overlay">
-    <p>The ant has fallen onto a drifting banana leaf!</p>
-    <p>Guide it by touching or dragging to dodge the rain!</p>
+    <p>The ant has landed on a real banana leaf drifting downriver!</p>
+    <p>Touch and drag to guide the ant and dodge the rain!</p>
     <button onclick="startIntro()">Continue</button>
   </div>
 
@@ -55,8 +55,12 @@
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+
     const antImg = new Image();
     antImg.src = "assets/ant.png";
+
+    const leafImg = new Image();
+    leafImg.src = "assets/banana-leaf.png";
 
     let W = window.innerWidth, H = window.innerHeight;
     let score = 0, running = false;
@@ -89,14 +93,19 @@
     function drawLeaf() {
       leaf.drift += 0.02;
       const tilt = Math.sin(leaf.drift) * 0.05;
+      const bob = Math.sin(leaf.drift * 1.5) * 3;
 
       ctx.save();
-      ctx.translate(leaf.x, leaf.y);
+      ctx.translate(leaf.x, leaf.y + bob);
       ctx.rotate(tilt);
-      ctx.fillStyle = "#6b8e23";
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 80, 20, 0, 0, Math.PI * 2);
-      ctx.fill();
+      if (leafImg.complete && leafImg.naturalWidth !== 0) {
+        ctx.drawImage(leafImg, -100, -40, 200, 80);
+      } else {
+        ctx.fillStyle = "#6b8e23";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 80, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -162,7 +171,6 @@
       requestAnimationFrame(gameLoop);
     }
 
-    // Input control
     canvas.addEventListener("touchmove", (e) => {
       if (!running) return;
       const touch = e.touches[0];
