@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Antventure: Complete Edition (v9 - Enhanced Placeholders)</title>
+    <title>Antventure: Complete Edition (v9.1 - Instructions)</title>
     <style>
         /* Basic reset and full viewport setup */
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,11 +35,38 @@
             color: white; z-index: 10;
             text-align: center; padding: 20px;
         }
+        /* Styling for the new Instructions Box */
+        #instructions {
+            border: 1px solid #00cec9; /* Teal border */
+            background-color: rgba(0, 206, 201, 0.1); /* Faint teal background */
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px; /* Space between instructions and story */
+            max-width: 500px; /* Limit width */
+            width: 80%;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            text-align: left; /* Align instruction text left */
+            opacity: 0; /* Start hidden for fade-in */
+            animation: fadein 3s 0.5s forwards; /* Apply fade-in, slight delay */
+        }
+        #instructions h3 {
+             text-align: center;
+             margin-bottom: 10px;
+             color: #00cec9; /* Teal heading */
+        }
+        #instructions b { /* Make bold text stand out */
+            color: #81ecec; /* Lighter teal for bold */
+        }
+
         #introText {
             font-size: 1.1rem; /* User's original size */
             white-space: pre-line; width: 80%; /* User's original width */
-            text-align: center; animation: fadein 4s; /* User's original timing */
-            line-height: 1.6; /* Added for readability */
+            max-width: 700px; /* Max width for story */
+            text-align: center;
+            opacity: 0; /* Start hidden */
+            animation: fadein 3s 1s forwards; /* Apply fade-in, delay after instructions start */
+            line-height: 1.6;
         }
         @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
         button {
@@ -47,6 +74,9 @@
             font-size: 1rem; /* User's original size */
             background: #00cec9; border: none; border-radius: 8px; cursor: pointer;
             color: white; transition: background-color 0.2s ease;
+            /* Animation for button appearance */
+            opacity: 0;
+            animation: fadein 1s 3s forwards; /* Fade in button last */
         }
         button:hover { background: #00a8a3; }
         /* Zone Visuals (User's Image Overlay Method) */
@@ -98,7 +128,18 @@
         <canvas id="gameCanvas"></canvas>
         <div id="zoneLeft"></div>
         <div id="zoneRight"></div>
+
         <div id="intro">
+            <div id="instructions">
+                <h3>How to Play:</h3>
+                <p>
+                    📱 <b>Touch & Drag</b> the ant left or right on mobile.<br />
+                    🖱️ <b>Move your mouse</b> to guide on desktop.<br />
+                    ☔ <b>Avoid raindrops</b> to stay dry.<br />
+                    🪵 <b>Hitting twigs</b> will shake the screen and reduce your score!<br />
+                    🌊 Stay afloat and beat the storm!
+                </p>
+            </div>
             <div id="introText">
                 In a lush jungle, a tiny ant slips and lands on a drifting banana leaf...
                 As the river current carries it away, storm clouds gather.
@@ -106,6 +147,7 @@
             </div>
             <button onclick="showTitle()">Continue</button>
         </div>
+
         <div id="titleScreen" style="display:none;">
             <h1>ANTVENTURE</h1>
             <button onclick="startGame()">Start Game</button>
@@ -116,6 +158,7 @@
             <button onclick="location.reload()">Try Again</button>
         </div>
     </div>
+
     <div id="zoneLabel"></div>
     <div id="scoreDisplay">Score: 0</div>
     <div id="devInfo">Developed by Satya | mnvdsreddy93@gmail.com</div>
@@ -137,346 +180,198 @@
     const zoneLeftDiv = document.getElementById("zoneLeft");
     const zoneRightDiv = document.getElementById("zoneRight");
     const zoneLabel = document.getElementById("zoneLabel");
-    const fullscreenButton = document.getElementById("fullscreenButton"); // Get button
-    const bgmAudio = document.getElementById("bgm"); // Get audio elements
-    const rainAudio = document.getElementById("rainSound"); // Get audio elements
+    const fullscreenButton = document.getElementById("fullscreenButton");
+    const bgmAudio = document.getElementById("bgm");
+    const rainAudio = document.getElementById("rainSound");
 
-    let W, H; // Logical canvas size (CSS pixels)
-    let scaleFactor = 1; // For HD rendering
-    let score = 0, running = false, t = 0, globalTime = 0;
-    let animationFrameId;
-    let isFullscreen = false; // Track fullscreen state
+    let W, H; let scaleFactor = 1; let score = 0, running = false, t = 0, globalTime = 0;
+    let animationFrameId; let isFullscreen = false;
 
     // --- Assets (User's Placeholders) ---
-    const antImg = new Image(); antImg.src = "assets/ant.png"; // Placeholder path
-    const leafImg = new Image(); leafImg.src = "assets/banana-leaf.png"; // Placeholder path
-    const twigImg = new Image(); twigImg.src = "assets/twig.png"; // Placeholder path
-
-    // Define expected dimensions for collision/drawing based on user's draw calls
+    const antImg = new Image(); antImg.src = "assets/ant.png";
+    const leafImg = new Image(); leafImg.src = "assets/banana-leaf.png";
+    const twigImg = new Image(); twigImg.src = "assets/twig.png";
     const leafDrawWidth = 200; const leafDrawHeight = 80;
     const antDrawWidth = 32; const antDrawHeight = 32;
     const twigDrawWidth = 40; const twigDrawHeight = 20;
-    // Ant's offset relative to leaf center (from user's drawAnt: leaf.x - 16, leaf.y - 35)
-    const antOffsetX = -16;
-    const antOffsetY = -35;
+    const antOffsetX = -16; const antOffsetY = -35;
 
     // --- Game Objects ---
-    let raindrops = [], twigs = [];
-    const splashes = []; // Keep enhanced splash effect
+    let raindrops = [], twigs = []; const splashes = [];
+    const leaf = { x: 0, y: 0, drift: 0, drawWidth: leafDrawWidth, drawHeight: leafDrawHeight };
 
-    // Leaf object (position controlled by player)
-    const leaf = {
-        x: 0, y: 0, // Will be initialized in resize/reset
-        drift: 0, // For tilt/bob effect from user code
-        drawWidth: leafDrawWidth, drawHeight: leafDrawHeight
-    };
-
-    // --- Raindrops (Using enhanced graphics/logic) ---
-    const raindropSettings = {
-        width: 2.5, heightFactor: 4, baseSpeed: 1.5, maxSpeed: 7, speedIncreaseFactor: 0.04,
-        baseSpawnRate: 0.03, maxSpawnRate: 0.12, spawnIncreaseFactor: 0.0008, highlightAlpha: 0.8,
-    };
-    function createRaindrop() {
-         const timeMultiplierSpeed = Math.min(t * 0.001 * raindropSettings.speedIncreaseFactor, raindropSettings.maxSpeed - raindropSettings.baseSpeed);
-         const currentSpeed = raindropSettings.baseSpeed + timeMultiplierSpeed; const dropWidth = raindropSettings.width + Math.random() * 1.5;
-         raindrops.push({ x: Math.random() * W, y: -dropWidth * raindropSettings.heightFactor, width: dropWidth, height: dropWidth * raindropSettings.heightFactor * (0.8 + Math.random() * 0.4), speed: currentSpeed + Math.random() * 1.0, opacity: 0.5 + Math.random() * 0.3 });
+    // --- Raindrops (Enhanced) ---
+    const raindropSettings = { width: 2.5, heightFactor: 4, baseSpeed: 1.5, maxSpeed: 7, speedIncreaseFactor: 0.04, baseSpawnRate: 0.03, maxSpawnRate: 0.12, spawnIncreaseFactor: 0.0008, highlightAlpha: 0.8, };
+    function createRaindrop() { /* ... no change ... */
+        const timeMultiplierSpeed = Math.min(t * 0.001 * raindropSettings.speedIncreaseFactor, raindropSettings.maxSpeed - raindropSettings.baseSpeed);
+        const currentSpeed = raindropSettings.baseSpeed + timeMultiplierSpeed; const dropWidth = raindropSettings.width + Math.random() * 1.5;
+        raindrops.push({ x: Math.random() * W, y: -dropWidth * raindropSettings.heightFactor, width: dropWidth, height: dropWidth * raindropSettings.heightFactor * (0.8 + Math.random() * 0.4), speed: currentSpeed + Math.random() * 1.0, opacity: 0.5 + Math.random() * 0.3 });
     }
-    function updateRaindrops() {
-         if (!running) return;
-         const spawnMultiplier = Math.min(t * 0.001 * raindropSettings.spawnIncreaseFactor, raindropSettings.maxSpawnRate - raindropSettings.baseSpawnRate);
-         const currentSpawnRate = raindropSettings.baseSpawnRate + spawnMultiplier;
-         if (Math.random() < currentSpawnRate) createRaindrop();
-
-         // Calculate ant's current absolute center position for collision
-         const antAbsCenterX = leaf.x + antOffsetX + antDrawWidth / 2;
-         const antAbsCenterY = leaf.y + antOffsetY + antDrawHeight / 2;
-
-         for (let i = raindrops.length - 1; i >= 0; i--) {
-             const drop = raindrops[i]; drop.y += drop.speed;
-             // Collision check with ant's calculated position and size
-             const dropCenterX = drop.x + drop.width / 2;
-             const dropCenterY = drop.y + drop.height / 2; // Use center of raindrop capsule
-             if ( Math.abs(dropCenterX - antAbsCenterX) < (drop.width / 2 + antDrawWidth / 2) &&
-                  Math.abs(dropCenterY - antAbsCenterY) < (drop.height / 2 + antDrawHeight / 2) )
-             {
-                 endGame("Soaked by rain!"); return;
-             }
-             if (drop.y - drop.height > H) {
-                 createSplash(drop.x + drop.width / 2, H, drop.speed);
-                 // Trigger splash sound here if using audio elements and it's loaded
-                 raindrops.splice(i, 1);
-             }
-         }
-    }
-    function drawRaindrops() { // Enhanced capsule drawing
-         raindrops.forEach(drop => {
-             ctx.fillStyle = `rgba(173, 216, 230, ${drop.opacity})`; ctx.beginPath();
-             ctx.arc(drop.x + drop.width / 2, drop.y + drop.width / 2, drop.width / 2, Math.PI, 0); ctx.lineTo(drop.x + drop.width, drop.y + drop.height - drop.width / 2); ctx.arc(drop.x + drop.width / 2, drop.y + drop.height - drop.width / 2, drop.width / 2, 0, Math.PI); ctx.lineTo(drop.x, drop.y + drop.width / 2); ctx.closePath(); ctx.fill();
-             ctx.fillStyle = `rgba(255, 255, 255, ${raindropSettings.highlightAlpha * drop.opacity})`; ctx.beginPath(); ctx.arc(drop.x + drop.width * 0.4, drop.y + drop.width * 0.4, drop.width * 0.2, 0, Math.PI * 2); ctx.fill();
-         });
-    }
-
-    // --- Twigs (Using user's image and logic, updated collision) ---
-    const twigSettings = {
-        spawnRate: 0.006, baseSpeed: 1.2, speedVariation: 0.5, scorePenalty: 10
-    };
-    function createTwig() {
-        twigs.push({
-            x: Math.random() * (W - twigDrawWidth), y: -twigDrawHeight,
-            speed: twigSettings.baseSpeed + Math.random() * twigSettings.speedVariation,
-        });
-    }
-    function updateTwigs() {
+    function updateRaindrops() { /* ... no change ... */
         if (!running) return;
-        if (Math.random() < twigSettings.spawnRate) createTwig();
-
+        const spawnMultiplier = Math.min(t * 0.001 * raindropSettings.spawnIncreaseFactor, raindropSettings.maxSpawnRate - raindropSettings.baseSpawnRate);
+        const currentSpawnRate = raindropSettings.baseSpawnRate + spawnMultiplier;
+        if (Math.random() < currentSpawnRate) createRaindrop();
         const antAbsCenterX = leaf.x + antOffsetX + antDrawWidth / 2;
         const antAbsCenterY = leaf.y + antOffsetY + antDrawHeight / 2;
-
-        for (let i = twigs.length - 1; i >= 0; i--) {
-            const twig = twigs[i]; twig.y += twig.speed;
-            const twigCenterX = twig.x + twigDrawWidth / 2;
-            const twigCenterY = twig.y + twigDrawHeight / 2;
-
-            if ( Math.abs(twigCenterX - antAbsCenterX) < (twigDrawWidth / 2 + antDrawWidth / 2) * 0.8 && // Forgiving overlap
-                  Math.abs(twigCenterY - antAbsCenterY) < (twigDrawHeight / 2 + antDrawHeight / 2) * 0.8 )
-            {
-                document.body.classList.add("shake");
-                score = Math.max(0, score - twigSettings.scorePenalty);
-                scoreDisplay.innerText = "Score: " + score;
-                setTimeout(() => document.body.classList.remove("shake"), 300);
-                // Trigger twig hit sound here if using audio elements
-                twigs.splice(i, 1);
-                createSplash(twigCenterX, twigCenterY, twig.speed * 0.5, 5); // Add splash
-            } else if (twig.y > H) {
-                twigs.splice(i, 1);
-            }
+        for (let i = raindrops.length - 1; i >= 0; i--) {
+            const drop = raindrops[i]; drop.y += drop.speed;
+            const dropCenterX = drop.x + drop.width / 2; const dropCenterY = drop.y + drop.height / 2;
+            if ( Math.abs(dropCenterX - antAbsCenterX) < (drop.width / 2 + antDrawWidth / 2) && Math.abs(dropCenterY - antAbsCenterY) < (drop.height / 2 + antDrawHeight / 2) ) { endGame("Soaked by rain!"); return; }
+            if (drop.y - drop.height > H) { createSplash(drop.x + drop.width / 2, H, drop.speed); raindrops.splice(i, 1); }
         }
     }
-    function drawTwigs() {
+    function drawRaindrops() { /* ... no change ... */
+        raindrops.forEach(drop => {
+            ctx.fillStyle = `rgba(173, 216, 230, ${drop.opacity})`; ctx.beginPath();
+            ctx.arc(drop.x + drop.width / 2, drop.y + drop.width / 2, drop.width / 2, Math.PI, 0); ctx.lineTo(drop.x + drop.width, drop.y + drop.height - drop.width / 2); ctx.arc(drop.x + drop.width / 2, drop.y + drop.height - drop.width / 2, drop.width / 2, 0, Math.PI); ctx.lineTo(drop.x, drop.y + drop.width / 2); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = `rgba(255, 255, 255, ${raindropSettings.highlightAlpha * drop.opacity})`; ctx.beginPath(); ctx.arc(drop.x + drop.width * 0.4, drop.y + drop.width * 0.4, drop.width * 0.2, 0, Math.PI * 2); ctx.fill();
+        });
+    }
+
+    // --- Twigs ---
+    const twigSettings = { spawnRate: 0.006, baseSpeed: 1.2, speedVariation: 0.5, scorePenalty: 10 };
+    function createTwig() { /* ... no change ... */
+        twigs.push({ x: Math.random() * (W - twigDrawWidth), y: -twigDrawHeight, speed: twigSettings.baseSpeed + Math.random() * twigSettings.speedVariation });
+    }
+    function updateTwigs() { /* ... no change ... */
+        if (!running) return;
+        if (Math.random() < twigSettings.spawnRate) createTwig();
+        const antAbsCenterX = leaf.x + antOffsetX + antDrawWidth / 2;
+        const antAbsCenterY = leaf.y + antOffsetY + antDrawHeight / 2;
+        for (let i = twigs.length - 1; i >= 0; i--) {
+            const twig = twigs[i]; twig.y += twig.speed;
+            const twigCenterX = twig.x + twigDrawWidth / 2; const twigCenterY = twig.y + twigDrawHeight / 2;
+            if ( Math.abs(twigCenterX - antAbsCenterX) < (twigDrawWidth / 2 + antDrawWidth / 2) * 0.8 && Math.abs(twigCenterY - antAbsCenterY) < (twigDrawHeight / 2 + antDrawHeight / 2) * 0.8 ) {
+                document.body.classList.add("shake"); score = Math.max(0, score - twigSettings.scorePenalty); scoreDisplay.innerText = "Score: " + score;
+                setTimeout(() => document.body.classList.remove("shake"), 300); twigs.splice(i, 1); createSplash(twigCenterX, twigCenterY, twig.speed * 0.5, 5);
+            } else if (twig.y > H) { twigs.splice(i, 1); }
+        }
+    }
+    function drawTwigs() { /* ... no change ... */
         twigs.forEach(twig => {
-            if (twigImg.complete && twigImg.naturalHeight !== 0) { // Check if image loaded
-                ctx.drawImage(twigImg, twig.x, twig.y, twigDrawWidth, twigDrawHeight);
-            } else { // Fallback drawing
-                ctx.fillStyle = '#8b4513'; // SaddleBrown
-                ctx.fillRect(twig.x, twig.y, twigDrawWidth, twigDrawHeight);
-            }
+            if (twigImg.complete && twigImg.naturalHeight !== 0) { ctx.drawImage(twigImg, twig.x, twig.y, twigDrawWidth, twigDrawHeight); }
+            else { ctx.fillStyle = '#8b4513'; ctx.fillRect(twig.x, twig.y, twigDrawWidth, twigDrawHeight); }
         });
     }
 
     // --- Drawing Functions ---
-    function drawWater() { // Enhanced water drawing
-         const gradient = ctx.createLinearGradient(0, 0, 0, H); gradient.addColorStop(0, '#6ca0dc'); gradient.addColorStop(0.6, '#3a7bd5'); gradient.addColorStop(1, '#004e92'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, W, H);
-         waterRipples.forEach(ripple => { ctx.strokeStyle = `rgba(255, 255, 255, ${ripple.opacity})`; ctx.lineWidth = 1.5; ctx.beginPath(); for (let x = 0; x < W; x++) { const waveY = ripple.offsetY + Math.sin(x * ripple.frequency + globalTime * ripple.speed) * ripple.amplitude; if (x === 0) ctx.moveTo(x, waveY); else ctx.lineTo(x, waveY); } ctx.stroke(); });
+    function drawWater() { /* ... no change ... */
+        const gradient = ctx.createLinearGradient(0, 0, 0, H); gradient.addColorStop(0, '#6ca0dc'); gradient.addColorStop(0.6, '#3a7bd5'); gradient.addColorStop(1, '#004e92'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, W, H);
+        waterRipples.forEach(ripple => { ctx.strokeStyle = `rgba(255, 255, 255, ${ripple.opacity})`; ctx.lineWidth = 1.5; ctx.beginPath(); for (let x = 0; x < W; x++) { const waveY = ripple.offsetY + Math.sin(x * ripple.frequency + globalTime * ripple.speed) * ripple.amplitude; if (x === 0) ctx.moveTo(x, waveY); else ctx.lineTo(x, waveY); } ctx.stroke(); });
     }
-
-    function drawLeaf() { // User's image drawing logic with bob/tilt
-        leaf.drift += 0.02;
-        const tilt = Math.sin(leaf.drift) * 0.05;
-        const bob = Math.sin(leaf.drift * 1.5) * 3;
-        ctx.save();
-        ctx.translate(leaf.x, leaf.y + bob);
-        ctx.rotate(tilt);
-        if (leafImg.complete && leafImg.naturalHeight !== 0) {
-            // Draw image centered based on its intended draw size
-            ctx.drawImage(leafImg, -leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight);
-        } else { // Fallback
-             ctx.fillStyle = 'lime'; // Bright green fallback
-             ctx.fillRect(-leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight);
-        }
-        ctx.restore();
+    function drawLeaf() { /* ... no change ... */
+        leaf.drift += 0.02; const tilt = Math.sin(leaf.drift) * 0.05; const bob = Math.sin(leaf.drift * 1.5) * 3; ctx.save(); ctx.translate(leaf.x, leaf.y + bob); ctx.rotate(tilt);
+        if (leafImg.complete && leafImg.naturalHeight !== 0) { ctx.drawImage(leafImg, -leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight); }
+        else { ctx.fillStyle = 'lime'; ctx.fillRect(-leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight); } ctx.restore();
     }
-
-    function drawAnt() { // User's image drawing logic
-         if (antImg.complete && antImg.naturalHeight !== 0) {
-             // Draw ant relative to leaf's calculated center using offsets
-             ctx.drawImage(antImg, leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight);
-         } else { // Fallback
-             ctx.fillStyle = '#222'; // Dark fallback
-             ctx.fillRect(leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight);
-         }
+    function drawAnt() { /* ... no change ... */
+        if (antImg.complete && antImg.naturalHeight !== 0) { ctx.drawImage(antImg, leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight); }
+        else { ctx.fillStyle = '#222'; ctx.fillRect(leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight); }
     }
 
     // --- Water Effects ---
     const waterRipples = []; const numRippleLayers = 3;
-    function initializeWaterRipples() {
-         waterRipples.length = 0; if (!H) return;
-         for (let i = 0; i < numRippleLayers; i++) { waterRipples.push({ amplitude: 1 + Math.random() * 2, frequency: 0.01 + Math.random() * 0.02, speed: 0.005 + Math.random() * 0.01, offsetY: H * (0.3 + Math.random() * 0.7), opacity: 0.05 + Math.random() * 0.1 }); }
+    function initializeWaterRipples() { /* ... no change ... */
+        waterRipples.length = 0; if (!H) return;
+        for (let i = 0; i < numRippleLayers; i++) { waterRipples.push({ amplitude: 1 + Math.random() * 2, frequency: 0.01 + Math.random() * 0.02, speed: 0.005 + Math.random() * 0.01, offsetY: H * (0.3 + Math.random() * 0.7), opacity: 0.05 + Math.random() * 0.1 }); }
     }
-    function createSplash(x, y, speed, count = 5) {
-         const particleCount = Math.floor(count + speed * 0.5);
-         for (let i = 0; i < particleCount; i++) { splashes.push({ x: x + Math.random() * 8 - 4, y: y - Math.random() * 5, vx: Math.random() * 2.5 - 1.25, vy: -Math.random() * (1 + speed * 0.3) - 0.5, radius: Math.random() * 1.8 + 1, life: 25 + Math.random() * 10, opacity: 0.8 + Math.random() * 0.2 }); }
+    function createSplash(x, y, speed, count = 5) { /* ... no change ... */
+        const particleCount = Math.floor(count + speed * 0.5);
+        for (let i = 0; i < particleCount; i++) { splashes.push({ x: x + Math.random() * 8 - 4, y: y - Math.random() * 5, vx: Math.random() * 2.5 - 1.25, vy: -Math.random() * (1 + speed * 0.3) - 0.5, radius: Math.random() * 1.8 + 1, life: 25 + Math.random() * 10, opacity: 0.8 + Math.random() * 0.2 }); }
     }
-    function updateSplashes() {
-         for (let i = splashes.length - 1; i >= 0; i--) { const s = splashes[i]; s.x += s.vx; s.y += s.vy; s.vy += 0.08; s.life--; s.opacity = Math.max(0, s.opacity - 0.03); if (s.life <= 0 || s.opacity <= 0) splashes.splice(i, 1); }
+    function updateSplashes() { /* ... no change ... */
+        for (let i = splashes.length - 1; i >= 0; i--) { const s = splashes[i]; s.x += s.vx; s.y += s.vy; s.vy += 0.08; s.life--; s.opacity = Math.max(0, s.opacity - 0.03); if (s.life <= 0 || s.opacity <= 0) splashes.splice(i, 1); }
     }
-    function drawSplashes() {
-         splashes.forEach(s => { ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill(); });
+    function drawSplashes() { /* ... no change ... */
+        splashes.forEach(s => { ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill(); });
     }
-    function drawMist() {
-         ctx.fillStyle = 'rgba(200, 220, 255, 0.03)'; ctx.fillRect(0, 0, W, H);
-     }
+    function drawMist() { /* ... no change ... */
+        ctx.fillStyle = 'rgba(200, 220, 255, 0.03)'; ctx.fillRect(0, 0, W, H);
+    }
 
-    // --- Zones (User's image overlay method) ---
-    const zones = [
-        { name: "🌴 Jungle", overlay: "overlays/zone-border-jungle.png" },
-        { name: "🌆 Urban Stream", overlay: "overlays/zone-border-urban.png" },
-        { name: "🌊 Waterfall", overlay: "overlays/zone-border-waterfall.png" }
-    ];
+    // --- Zones ---
+    const zones = [ /* ... no change ... */ { name: "🌴 Jungle", overlay: "overlays/zone-border-jungle.png" }, { name: "🌆 Urban Stream", overlay: "overlays/zone-border-urban.png" }, { name: "🌊 Waterfall", overlay: "overlays/zone-border-waterfall.png" }];
     let currentZone = -1; let zoneTimeout;
-
-    function cycleZones() { // User's logic
+    function cycleZones() { /* ... no change ... */
         if (!running) return; clearTimeout(zoneTimeout);
-        let next; do { next = Math.floor(Math.random() * zones.length); } while (next === currentZone);
-        currentZone = next;
-        // NOTE: These require valid image paths in the 'zones' array to work
-        zoneLeftDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`;
-        zoneRightDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`;
-        zoneLeftDiv.style.opacity = 1; zoneRightDiv.style.opacity = 1;
-        zoneLabel.innerText = zones[currentZone].name; zoneLabel.style.opacity = 1;
+        let next; do { next = Math.floor(Math.random() * zones.length); } while (next === currentZone); currentZone = next;
+        zoneLeftDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`; zoneRightDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`;
+        zoneLeftDiv.style.opacity = 1; zoneRightDiv.style.opacity = 1; zoneLabel.innerText = zones[currentZone].name; zoneLabel.style.opacity = 1;
         setTimeout(() => { if(running) zoneLabel.style.opacity = 0; }, 2000);
-        zoneTimeout = setTimeout(() => {
-            if (running) {
-                zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0;
-                setTimeout(cycleZones, 4000);
-            }
-        }, 25000);
+        zoneTimeout = setTimeout(() => { if (running) { zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; setTimeout(cycleZones, 4000); } }, 25000);
     }
 
     // --- Game Logic & Rendering ---
-    function resizeCanvas() { // Robust resize logic
+    function resizeCanvas() { /* ... no change ... */
         const viewportWidth = window.innerWidth; const viewportHeight = window.innerHeight;
-        scaleFactor = window.devicePixelRatio || 1;
-        let logicalWidth, logicalHeight;
-
-        if (isFullscreen) {
-            logicalWidth = viewportWidth; logicalHeight = viewportHeight;
-        } else {
-             const aspectRatio = 16 / 10; logicalWidth = viewportWidth; logicalHeight = viewportWidth / aspectRatio;
-             if (logicalHeight > viewportHeight * 0.95) { logicalHeight = viewportHeight * 0.95; logicalWidth = logicalHeight * aspectRatio; }
-             logicalWidth = Math.min(logicalWidth, viewportWidth * 0.98); logicalHeight = Math.min(logicalHeight, viewportHeight * 0.98);
-        }
-
+        scaleFactor = window.devicePixelRatio || 1; let logicalWidth, logicalHeight;
+        if (isFullscreen) { logicalWidth = viewportWidth; logicalHeight = viewportHeight; }
+        else { const aspectRatio = 16 / 10; logicalWidth = viewportWidth; logicalHeight = viewportWidth / aspectRatio; if (logicalHeight > viewportHeight * 0.95) { logicalHeight = viewportHeight * 0.95; logicalWidth = logicalHeight * aspectRatio; } logicalWidth = Math.min(logicalWidth, viewportWidth * 0.98); logicalHeight = Math.min(logicalHeight, viewportHeight * 0.98); }
         gameContainer.style.width = `${logicalWidth}px`; gameContainer.style.height = `${logicalHeight}px`;
-        W = logicalWidth; H = logicalHeight;
-        canvas.width = Math.round(W * scaleFactor); canvas.height = Math.round(H * scaleFactor);
-        canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-        ctx.setTransform(scaleFactor, 0, 0, scaleFactor, 0, 0);
-
+        W = logicalWidth; H = logicalHeight; canvas.width = Math.round(W * scaleFactor); canvas.height = Math.round(H * scaleFactor);
+        canvas.style.width = `${W}px`; canvas.style.height = `${H}px`; ctx.setTransform(scaleFactor, 0, 0, scaleFactor, 0, 0);
         console.log(`Resized: Fullscreen=${isFullscreen}, Logical=${W.toFixed(0)}x${H.toFixed(0)}, Physical=${canvas.width}x${canvas.height}, DPR=${scaleFactor}`);
-
         initializeWaterRipples();
         if (!running && !animationFrameId) { resetGame(); drawStaticFrame(); }
         else if (running) { leaf.x = Math.max(leaf.drawWidth/2, Math.min(W - leaf.drawWidth/2, leaf.x)); leaf.y = H * 0.7; }
     }
-
     function drawStaticFrame(){ if (W && H) { drawWater(); drawLeaf(); drawAnt(); } }
     function updateScore() { if (running) { score++; scoreDisplay.innerText = "Score: " + score; } }
 
-    function gameLoop(timestamp) {
+    function gameLoop(timestamp) { /* ... no change ... */
         globalTime = timestamp; t++;
         if (!running && animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; return; }
         if (!running) return;
-
-        updateScore(); updateRaindrops(); updateTwigs(); updateSplashes(); // Leaf pos updated by input
-
-        drawWater(); drawTwigs(); drawLeaf(); drawAnt(); drawRaindrops(); drawSplashes(); drawMist(); // Drawing order
-
+        updateScore(); updateRaindrops(); updateTwigs(); updateSplashes();
+        drawWater(); drawTwigs(); drawLeaf(); drawAnt(); drawRaindrops(); drawSplashes(); drawMist();
         animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     // --- UI Flow & Game State ---
     function showTitle() { introScreen.style.display = "none"; titleScreen.style.display = "flex"; }
-
-    function startGame() {
-        console.log("Starting game...");
-        titleScreen.style.display = "none"; gameOverScreen.style.display = "none";
-        scoreDisplay.style.display = "block";
-        resetGame(); running = true;
-        startTime = Date.now(); score = 0; scoreDisplay.innerText = "Score: 0";
-
-        // Try to play placeholder audio (requires user interaction first)
-        // Browsers might block this if muted isn't respected or src is invalid
-        bgmAudio.play().catch(e => console.log("BGM play failed (user interaction needed or bad src)"));
-        rainAudio.play().catch(e => console.log("Rain sound play failed"));
-        // Unmute after play starts (might still be blocked)
-        bgmAudio.muted = false;
-        rainAudio.muted = false;
-
-
-        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        leaf.x = W / 2; leaf.y = H * 0.7; // Initial position
-
-        cycleZones();
-        animationFrameId = requestAnimationFrame(gameLoop);
+    function startGame() { /* ... no change ... */
+        console.log("Starting game..."); titleScreen.style.display = "none"; gameOverScreen.style.display = "none"; scoreDisplay.style.display = "block";
+        resetGame(); running = true; startTime = Date.now(); score = 0; scoreDisplay.innerText = "Score: 0";
+        bgmAudio.play().catch(e => console.log("BGM play failed:", e)); rainAudio.play().catch(e => console.log("Rain sound play failed:", e));
+        bgmAudio.muted = false; rainAudio.muted = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId); leaf.x = W / 2; leaf.y = H * 0.7;
+        cycleZones(); animationFrameId = requestAnimationFrame(gameLoop);
     }
-
-     function resetGame() {
-         console.log("Resetting game state...");
-         running = false;
-         if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+     function resetGame() { /* ... no change ... */
+         console.log("Resetting game state..."); running = false; if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
          if(W && H){ leaf.x = W / 2; leaf.y = H * 0.7; raindrops.length = 0; twigs.length = 0; splashes.length = 0; initializeWaterRipples(); }
-         score = 0; t = 0; globalTime = 0; scoreDisplay.innerText = "Score: 0";
-         clearTimeout(zoneTimeout); zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; zoneLabel.style.opacity = 0;
-         // Pause audio if it was playing
-         bgmAudio.pause(); rainAudio.pause();
+         score = 0; t = 0; globalTime = 0; scoreDisplay.innerText = "Score: 0"; clearTimeout(zoneTimeout); zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; zoneLabel.style.opacity = 0;
+         bgmAudio.pause(); rainAudio.pause(); bgmAudio.currentTime = 0; rainAudio.currentTime = 0; // Reset audio position
       }
-
-    function endGame(reason = "Game Over!") {
-         if (!running) return;
-        console.log("Game Over!", reason);
-        running = false;
-        bgmAudio.pause(); rainAudio.pause(); // Stop audio
-        finalScoreDisplay.innerText = `Final Score: ${score}`;
-        gameOverScreen.querySelector('h2').innerText = `💥 ${reason}`;
-        gameOverScreen.style.display = "flex";
-        clearTimeout(zoneTimeout);
+    function endGame(reason = "Game Over!") { /* ... no change ... */
+         if (!running) return; console.log("Game Over!", reason); running = false; bgmAudio.pause(); rainAudio.pause();
+         finalScoreDisplay.innerText = `Final Score: ${score}`; gameOverScreen.querySelector('h2').innerText = `💥 ${reason}`; gameOverScreen.style.display = "flex"; clearTimeout(zoneTimeout);
     }
 
     // --- Input Handling (User's original scheme) ---
-    function handleMouseMove(e) {
-        if (running) {
-            // Convert clientX to canvas logical X coordinate
-            const rect = canvas.getBoundingClientRect();
-            const canvasX = e.clientX - rect.left;
-            const minX = leaf.drawWidth / 2; const maxX = W - leaf.drawWidth / 2;
-            leaf.x = Math.max(minX, Math.min(maxX, canvasX));
-        }
+    function handleMouseMove(e) { /* ... no change ... */
+        if (running) { const rect = canvas.getBoundingClientRect(); const canvasX = e.clientX - rect.left; const minX = leaf.drawWidth / 2; const maxX = W - leaf.drawWidth / 2; leaf.x = Math.max(minX, Math.min(maxX, canvasX)); }
     }
-    function handleTouchMove(e) {
-        if (!running) return;
-        const rect = canvas.getBoundingClientRect();
-        const canvasX = e.touches[0].clientX - rect.left;
-        const minX = leaf.drawWidth / 2; const maxX = W - leaf.drawWidth / 2;
-        leaf.x = Math.max(minX, Math.min(maxX, canvasX));
-        e.preventDefault();
+    function handleTouchMove(e) { /* ... no change ... */
+        if (!running) return; const rect = canvas.getBoundingClientRect(); const canvasX = e.touches[0].clientX - rect.left; const minX = leaf.drawWidth / 2; const maxX = W - leaf.drawWidth / 2; leaf.x = Math.max(minX, Math.min(maxX, canvasX)); e.preventDefault();
     }
 
     // --- Fullscreen API ---
-    function toggleFullScreen() {
-        const elem = document.documentElement;
-        if (!isFullscreen) { if (elem.requestFullscreen) elem.requestFullscreen(); else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen(); }
-        else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); }
+    function toggleFullScreen() { /* ... no change ... */
+        const elem = document.documentElement; if (!isFullscreen) { if (elem.requestFullscreen) elem.requestFullscreen(); else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen(); } else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); }
     }
-    function fullscreenChangeHandler() { // Combined handler
-         isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-         if (isFullscreen) { document.body.classList.add('fullscreen-active'); fullscreenButton.textContent = "Exit"; }
-         else { document.body.classList.remove('fullscreen-active'); fullscreenButton.textContent = "Full Screen"; }
-         setTimeout(resizeCanvas, 150); // Resize after state change
+    function fullscreenChangeHandler() { /* ... no change ... */
+         isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement); if (isFullscreen) { document.body.classList.add('fullscreen-active'); fullscreenButton.textContent = "Exit"; } else { document.body.classList.remove('fullscreen-active'); fullscreenButton.textContent = "Full Screen"; } setTimeout(resizeCanvas, 150);
     }
-    document.addEventListener('fullscreenchange', fullscreenChangeHandler);
-    document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
-
+    document.addEventListener('fullscreenchange', fullscreenChangeHandler); document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
 
     // --- Event Listeners ---
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
     fullscreenButton.addEventListener('click', toggleFullScreen); // Listener for button
     window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('load', () => {
-        console.log("Window loaded.");
-        resizeCanvas(); // Initial setup size and static frame
-    });
+    window.addEventListener('load', () => { console.log("Window loaded."); resizeCanvas(); });
 
 </script>
 </body>
