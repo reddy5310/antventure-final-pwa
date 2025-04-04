@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Antventure: Complete Edition (v9.1 - Instructions)</title>
+    <title>Antventure: Complete Edition (v9.2 - Buttons)</title>
     <style>
         /* Basic reset and full viewport setup */
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -16,10 +16,9 @@
             display: flex; justify-content: center; align-items: center;
             flex-direction: column;
         }
-        /* Game container will be sized by JS */
         #gameContainer {
             position: relative; max-width: 100%; max-height: 100%;
-            box-shadow: 0 0 20px rgba(0, 206, 201, 0.5); /* User's teal glow */
+            box-shadow: 0 0 20px rgba(0, 206, 201, 0.5);
             background-color: #111; overflow: hidden;
         }
         canvas {
@@ -27,99 +26,108 @@
             image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;
             position: absolute; top: 0; left: 0; z-index: 1;
         }
-        /* Overlays for Intro, Title, Game Over (User's Style) */
         #intro, #titleScreen, #gameOver {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: rgba(0,0,0,0.85); /* User's original alpha */
-            color: white; z-index: 10;
-            text-align: center; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: space-evenly; background: rgba(0,0,0,0.85);
+            color: white; z-index: 10; text-align: center;
+            padding: 25px 15px; overflow-y: auto;
         }
-        /* Styling for the new Instructions Box */
+        #intro > div, #intro > button { flex-shrink: 0; }
+
         #instructions {
-            border: 1px solid #00cec9; /* Teal border */
-            background-color: rgba(0, 206, 201, 0.1); /* Faint teal background */
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 25px; /* Space between instructions and story */
-            max-width: 500px; /* Limit width */
-            width: 80%;
-            font-size: 0.95rem;
-            line-height: 1.7;
-            text-align: left; /* Align instruction text left */
-            opacity: 0; /* Start hidden for fade-in */
-            animation: fadein 3s 0.5s forwards; /* Apply fade-in, slight delay */
+            border: 1px solid #00cec9; background-color: rgba(0, 206, 201, 0.1);
+            padding: 15px 20px; border-radius: 8px; margin-bottom: 20px;
+            max-width: 480px; width: 90%; font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+            line-height: 1.6; text-align: left; opacity: 0; animation: fadein 3s 0.5s forwards;
         }
-        #instructions h3 {
-             text-align: center;
-             margin-bottom: 10px;
-             color: #00cec9; /* Teal heading */
-        }
-        #instructions b { /* Make bold text stand out */
-            color: #81ecec; /* Lighter teal for bold */
-        }
+        #instructions h3 { text-align: center; margin-bottom: 10px; color: #00cec9; }
+        #instructions b { color: #81ecec; }
 
         #introText {
-            font-size: 1.1rem; /* User's original size */
-            white-space: pre-line; width: 80%; /* User's original width */
-            max-width: 700px; /* Max width for story */
-            text-align: center;
-            opacity: 0; /* Start hidden */
-            animation: fadein 3s 1s forwards; /* Apply fade-in, delay after instructions start */
-            line-height: 1.6;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem); white-space: pre-line;
+            width: 85%; max-width: 650px; text-align: center; opacity: 0;
+            animation: fadein 3s 1s forwards; line-height: 1.5; margin-bottom: 20px;
         }
         @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
-        button {
-            margin-top: 30px; padding: 10px 25px; /* User's original padding */
-            font-size: 1rem; /* User's original size */
-            background: #00cec9; border: none; border-radius: 8px; cursor: pointer;
-            color: white; transition: background-color 0.2s ease;
-            /* Animation for button appearance */
-            opacity: 0;
-            animation: fadein 1s 3s forwards; /* Fade in button last */
+
+        /* --- Enhanced Button Styles --- */
+        button { /* Base style for all buttons */
+            padding: 10px 25px; font-size: 1rem;
+            border: none; border-radius: 8px; cursor: pointer;
+            color: white; transition: all 0.2s ease; /* Smooth transitions */
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
         }
-        button:hover { background: #00a8a3; }
-        /* Zone Visuals (User's Image Overlay Method) */
-        #zoneLeft, #zoneRight {
+        button:hover { filter: brightness(1.1); } /* General hover effect */
+
+        /* Specific styles for Intro/Title/Game Over buttons */
+        #intro button, #titleScreen button, #gameOver button {
+            background: linear-gradient(145deg, #00cec9, #00a8a3); /* Vibrant teal gradient */
+            box-shadow: 0 5px 0px #007a75, /* Base shadow */
+                        0 8px 15px rgba(0, 0, 0, 0.3); /* Softer outer shadow */
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            margin-top: 25px; /* Adjusted margin */
+            padding: 12px 30px; /* Slightly larger padding */
+            font-size: clamp(1rem, 2.3vw, 1.2rem); /* Slightly larger font */
+            opacity: 0; /* Keep fade-in for intro button */
+            animation: fadein 1s 3s forwards; /* Applies only to intro button */
+        }
+        /* Ensure Title/Game Over buttons are visible immediately */
+        #titleScreen button, #gameOver button {
+            opacity: 1;
+            animation: none; /* Remove fade-in from these */
+        }
+
+        #intro button:hover, #titleScreen button:hover, #gameOver button:hover {
+            background: linear-gradient(145deg, #13eaea, #00baba); /* Brighter gradient on hover */
+            box-shadow: 0 6px 0px #006864, 0 10px 20px rgba(0, 0, 0, 0.35);
+            transform: translateY(-1px); /* Slight lift */
+            filter: brightness(1.15); /* Overwrite base hover brightness */
+        }
+
+        #intro button:active, #titleScreen button:active, #gameOver button:active {
+            background: linear-gradient(145deg, #00a8a3, #00cec9); /* Inverted gradient */
+            transform: translateY(3px); /* Push down */
+            box-shadow: 0 2px 0px #006864, /* Compressed shadow */
+                        0 4px 8px rgba(0, 0, 0, 0.3);
+            filter: brightness(1); /* Reset brightness */
+        }
+
+        /* --- Other Styles --- */
+        #titleScreen h1 { font-size: clamp(2rem, 6vw, 3.5rem); margin-bottom: 10px; }
+        #gameOver h2 { margin-bottom: 10px; font-size: clamp(1.5rem, 4vw, 2rem); }
+        #finalScore { margin-bottom: 20px; font-size: clamp(1.1rem, 2.5vw, 1.4rem); }
+
+        #zoneLeft, #zoneRight { /* ... no change ... */
             position: absolute; top: 0; width: 10vw; height: 100%;
             background-size: cover; background-repeat: no-repeat; z-index: 2;
             opacity: 0; transition: opacity 1s; pointer-events: none;
         }
-        #zoneLeft { left: 0; }
-        #zoneRight { right: 0; transform: scaleX(-1); }
-        #zoneLabel {
-            position: absolute; top: 15px; /* User's original position */
-            left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.6); padding: 8px 20px; /* User's original padding */
-            border-radius: 10px; font-weight: bold; color: white; z-index: 3; opacity: 0;
+        #zoneLeft { left: 0; } #zoneRight { right: 0; transform: scaleX(-1); }
+        #zoneLabel { /* ... no change ... */
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 10px;
+            font-weight: bold; color: white; z-index: 3; opacity: 0;
             transition: opacity 0.5s ease-in-out; font-size: clamp(0.9rem, 2.2vw, 1.2rem);
         }
-        /* Score and Dev Info (User's Style) */
-        #scoreDisplay, #devInfo {
+        #scoreDisplay, #devInfo { /* ... no change ... */
             position: absolute; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.6); color: white; padding: 8px 20px;
-            font-size: 0.9rem; /* User's original size */
-            border-radius: 10px; z-index: 3;
+            font-size: 0.9rem; border-radius: 10px; z-index: 3;
         }
-        #scoreDisplay { top: 10px; display: none; } /* User's original position */
-        #devInfo { bottom: 10px; } /* User's original position */
-        /* Game Over Specifics */
-        #gameOver h2 { margin-bottom: 10px; font-size: clamp(1.5rem, 4vw, 2rem); }
-        #finalScore { margin-bottom: 20px; font-size: clamp(1.1rem, 2.5vw, 1.4rem); }
-        /* Screen Shake (User's original keyframes) */
-        body.shake { animation: shake 0.3s; }
-        @keyframes shake {
-            0% { transform: translate(0px, 0px); } 25% { transform: translate(2px, -2px); }
-            50% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, 2px); }
-            100% { transform: translate(0px, 0px); }
-        }
-         /* Optional Fullscreen Button */
-         #fullscreenButton {
+        #scoreDisplay { top: 10px; display: none; } #devInfo { bottom: 10px; }
+        body.shake { animation: shake 0.3s; } /* ... no change ... */
+        @keyframes shake { 0% { transform: translate(0px, 0px); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, 2px); } 100% { transform: translate(0px, 0px); } }
+        #fullscreenButton { /* Style for fullscreen button */
              position: absolute; top: 10px; right: 10px; z-index: 20;
              padding: 5px 10px; font-size: 0.8rem;
-             background: rgba(0,0,0,0.5); border: 1px solid #ccc; color: white;
-             cursor: pointer; border-radius: 5px;
-         }
+             background: rgba(50,50,50,0.6); border: 1px solid #888; color: white;
+             cursor: pointer; border-radius: 5px; text-shadow: none;
+             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+         #fullscreenButton:hover { background: rgba(80,80,80,0.7); filter: brightness(1.1); }
+         #fullscreenButton:active { transform: translateY(1px); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
          .fullscreen-active #fullscreenButton { opacity: 0.5; }
     </style>
 </head>
@@ -169,6 +177,7 @@
 
 <script>
     // --- Game Setup ---
+    // ... (JavaScript remains exactly the same as the previous version) ...
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     const gameContainer = document.getElementById('gameContainer');
