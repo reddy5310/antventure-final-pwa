@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Antventure: Complete Edition (v9.2 - Buttons)</title>
-    <style>
+    <title>Antventure: Complete Edition (v9.3 - Night/Difficulty)</title> <style>
         /* Basic reset and full viewport setup */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
@@ -20,6 +19,8 @@
             position: relative; max-width: 100%; max-height: 100%;
             box-shadow: 0 0 20px rgba(0, 206, 201, 0.5);
             background-color: #111; overflow: hidden;
+            /* Added transition for background changes */
+            transition: box-shadow 1s ease-in-out;
         }
         canvas {
             display: block; width: 100%; height: 100%; cursor: pointer;
@@ -52,46 +53,31 @@
         @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
         /* --- Enhanced Button Styles --- */
-        button { /* Base style for all buttons */
-            padding: 10px 25px; font-size: 1rem;
-            border: none; border-radius: 8px; cursor: pointer;
-            color: white; transition: all 0.2s ease; /* Smooth transitions */
+        button { /* Base style */
+            padding: 10px 25px; font-size: 1rem; border: none; border-radius: 8px;
+            cursor: pointer; color: white; transition: all 0.2s ease;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
         }
-        button:hover { filter: brightness(1.1); } /* General hover effect */
+        button:hover { filter: brightness(1.1); }
 
         /* Specific styles for Intro/Title/Game Over buttons */
         #intro button, #titleScreen button, #gameOver button {
-            background: linear-gradient(145deg, #00cec9, #00a8a3); /* Vibrant teal gradient */
-            box-shadow: 0 5px 0px #007a75, /* Base shadow */
-                        0 8px 15px rgba(0, 0, 0, 0.3); /* Softer outer shadow */
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            margin-top: 25px; /* Adjusted margin */
-            padding: 12px 30px; /* Slightly larger padding */
-            font-size: clamp(1rem, 2.3vw, 1.2rem); /* Slightly larger font */
-            opacity: 0; /* Keep fade-in for intro button */
-            animation: fadein 1s 3s forwards; /* Applies only to intro button */
+            background: linear-gradient(145deg, #00cec9, #00a8a3);
+            box-shadow: 0 5px 0px #007a75, 0 8px 15px rgba(0, 0, 0, 0.3);
+            font-weight: bold; letter-spacing: 0.5px; margin-top: 25px;
+            padding: 12px 30px; font-size: clamp(1rem, 2.3vw, 1.2rem);
+            opacity: 0; animation: fadein 1s 3s forwards;
         }
-        /* Ensure Title/Game Over buttons are visible immediately */
-        #titleScreen button, #gameOver button {
-            opacity: 1;
-            animation: none; /* Remove fade-in from these */
-        }
-
+        #titleScreen button, #gameOver button { opacity: 1; animation: none; }
         #intro button:hover, #titleScreen button:hover, #gameOver button:hover {
-            background: linear-gradient(145deg, #13eaea, #00baba); /* Brighter gradient on hover */
+            background: linear-gradient(145deg, #13eaea, #00baba);
             box-shadow: 0 6px 0px #006864, 0 10px 20px rgba(0, 0, 0, 0.35);
-            transform: translateY(-1px); /* Slight lift */
-            filter: brightness(1.15); /* Overwrite base hover brightness */
+            transform: translateY(-1px); filter: brightness(1.15);
         }
-
         #intro button:active, #titleScreen button:active, #gameOver button:active {
-            background: linear-gradient(145deg, #00a8a3, #00cec9); /* Inverted gradient */
-            transform: translateY(3px); /* Push down */
-            box-shadow: 0 2px 0px #006864, /* Compressed shadow */
-                        0 4px 8px rgba(0, 0, 0, 0.3);
-            filter: brightness(1); /* Reset brightness */
+            background: linear-gradient(145deg, #00a8a3, #00cec9);
+            transform: translateY(3px); box-shadow: 0 2px 0px #006864, 0 4px 8px rgba(0, 0, 0, 0.3);
+            filter: brightness(1);
         }
 
         /* --- Other Styles --- */
@@ -119,7 +105,7 @@
         #scoreDisplay { top: 10px; display: none; } #devInfo { bottom: 10px; }
         body.shake { animation: shake 0.3s; } /* ... no change ... */
         @keyframes shake { 0% { transform: translate(0px, 0px); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, 2px); } 100% { transform: translate(0px, 0px); } }
-        #fullscreenButton { /* Style for fullscreen button */
+        #fullscreenButton { /* ... no change ... */
              position: absolute; top: 10px; right: 10px; z-index: 20;
              padding: 5px 10px; font-size: 0.8rem;
              background: rgba(50,50,50,0.6); border: 1px solid #888; color: white;
@@ -136,7 +122,6 @@
         <canvas id="gameCanvas"></canvas>
         <div id="zoneLeft"></div>
         <div id="zoneRight"></div>
-
         <div id="intro">
             <div id="instructions">
                 <h3>How to Play:</h3>
@@ -166,7 +151,6 @@
             <button onclick="location.reload()">Try Again</button>
         </div>
     </div>
-
     <div id="zoneLabel"></div>
     <div id="scoreDisplay">Score: 0</div>
     <div id="devInfo">Developed by Satya | mnvdsreddy93@gmail.com</div>
@@ -177,9 +161,9 @@
 
 <script>
     // --- Game Setup ---
-    // ... (JavaScript remains exactly the same as the previous version) ...
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
+    // ... (Get other DOM elements as before) ...
     const gameContainer = document.getElementById('gameContainer');
     const introScreen = document.getElementById("intro");
     const titleScreen = document.getElementById("titleScreen");
@@ -193,8 +177,15 @@
     const bgmAudio = document.getElementById("bgm");
     const rainAudio = document.getElementById("rainSound");
 
+
     let W, H; let scaleFactor = 1; let score = 0, running = false, t = 0, globalTime = 0;
     let animationFrameId; let isFullscreen = false;
+
+    // --- Difficulty & View Settings ---
+    let difficultyFactor = 1.0; // 1.0 = normal, < 1.0 = easier (portrait)
+    let isNightView = false;
+    let nightViewTimer = null; // Timer for checking when to start night view
+    let nightViewDurationTimeout = null; // Timer for ending current night view
 
     // --- Assets (User's Placeholders) ---
     const antImg = new Image(); antImg.src = "assets/ant.png";
@@ -209,33 +200,55 @@
     let raindrops = [], twigs = []; const splashes = [];
     const leaf = { x: 0, y: 0, drift: 0, drawWidth: leafDrawWidth, drawHeight: leafDrawHeight };
 
-    // --- Raindrops (Enhanced) ---
-    const raindropSettings = { width: 2.5, heightFactor: 4, baseSpeed: 1.5, maxSpeed: 7, speedIncreaseFactor: 0.04, baseSpawnRate: 0.03, maxSpawnRate: 0.12, spawnIncreaseFactor: 0.0008, highlightAlpha: 0.8, };
-    function createRaindrop() { /* ... no change ... */
-        const timeMultiplierSpeed = Math.min(t * 0.001 * raindropSettings.speedIncreaseFactor, raindropSettings.maxSpeed - raindropSettings.baseSpeed);
-        const currentSpeed = raindropSettings.baseSpeed + timeMultiplierSpeed; const dropWidth = raindropSettings.width + Math.random() * 1.5;
-        raindrops.push({ x: Math.random() * W, y: -dropWidth * raindropSettings.heightFactor, width: dropWidth, height: dropWidth * raindropSettings.heightFactor * (0.8 + Math.random() * 0.4), speed: currentSpeed + Math.random() * 1.0, opacity: 0.5 + Math.random() * 0.3 });
-    }
-    function updateRaindrops() { /* ... no change ... */
-        if (!running) return;
-        const spawnMultiplier = Math.min(t * 0.001 * raindropSettings.spawnIncreaseFactor, raindropSettings.maxSpawnRate - raindropSettings.baseSpawnRate);
-        const currentSpawnRate = raindropSettings.baseSpawnRate + spawnMultiplier;
-        if (Math.random() < currentSpawnRate) createRaindrop();
-        const antAbsCenterX = leaf.x + antOffsetX + antDrawWidth / 2;
-        const antAbsCenterY = leaf.y + antOffsetY + antDrawHeight / 2;
-        for (let i = raindrops.length - 1; i >= 0; i--) {
-            const drop = raindrops[i]; drop.y += drop.speed;
-            const dropCenterX = drop.x + drop.width / 2; const dropCenterY = drop.y + drop.height / 2;
-            if ( Math.abs(dropCenterX - antAbsCenterX) < (drop.width / 2 + antDrawWidth / 2) && Math.abs(dropCenterY - antAbsCenterY) < (drop.height / 2 + antDrawHeight / 2) ) { endGame("Soaked by rain!"); return; }
-            if (drop.y - drop.height > H) { createSplash(drop.x + drop.width / 2, H, drop.speed); raindrops.splice(i, 1); }
-        }
-    }
-    function drawRaindrops() { /* ... no change ... */
-        raindrops.forEach(drop => {
-            ctx.fillStyle = `rgba(173, 216, 230, ${drop.opacity})`; ctx.beginPath();
-            ctx.arc(drop.x + drop.width / 2, drop.y + drop.width / 2, drop.width / 2, Math.PI, 0); ctx.lineTo(drop.x + drop.width, drop.y + drop.height - drop.width / 2); ctx.arc(drop.x + drop.width / 2, drop.y + drop.height - drop.width / 2, drop.width / 2, 0, Math.PI); ctx.lineTo(drop.x, drop.y + drop.width / 2); ctx.closePath(); ctx.fill();
-            ctx.fillStyle = `rgba(255, 255, 255, ${raindropSettings.highlightAlpha * drop.opacity})`; ctx.beginPath(); ctx.arc(drop.x + drop.width * 0.4, drop.y + drop.width * 0.4, drop.width * 0.2, 0, Math.PI * 2); ctx.fill();
+    // --- Raindrops (Difficulty Adjusted) ---
+    const raindropSettings = {
+        width: 2.5, heightFactor: 4, baseSpeed: 1.5, maxSpeed: 7, speedIncreaseFactor: 0.04,
+        baseSpawnRate: 0.03, maxSpawnRate: 0.12, spawnIncreaseFactor: 0.0008, highlightAlpha: 0.8,
+    };
+    function createRaindrop() {
+        // Calculate speed increase based on time and difficulty factor
+        const maxSpeedIncrease = raindropSettings.maxSpeed - raindropSettings.baseSpeed;
+        const timeMultiplierSpeed = Math.min(t * 0.001 * raindropSettings.speedIncreaseFactor, maxSpeedIncrease) * difficultyFactor; // Apply difficulty factor here
+        const currentSpeed = raindropSettings.baseSpeed + timeMultiplierSpeed;
+        const dropWidth = raindropSettings.width + Math.random() * 1.5;
+
+        raindrops.push({
+            x: Math.random() * W, y: -dropWidth * raindropSettings.heightFactor,
+            width: dropWidth, height: dropWidth * raindropSettings.heightFactor * (0.8 + Math.random() * 0.4),
+            speed: currentSpeed + Math.random() * 1.0, // Add base variation
+            opacity: 0.5 + Math.random() * 0.3,
         });
+    }
+    function updateRaindrops() {
+         if (!running) return;
+         // Calculate spawn rate based on time and difficulty factor
+         const maxSpawnIncrease = raindropSettings.maxSpawnRate - raindropSettings.baseSpawnRate;
+         const spawnMultiplier = Math.min(t * 0.001 * raindropSettings.spawnIncreaseFactor, maxSpawnIncrease) * difficultyFactor; // Apply difficulty factor here
+         const currentSpawnRate = raindropSettings.baseSpawnRate + spawnMultiplier;
+
+         if (Math.random() < currentSpawnRate) createRaindrop();
+
+         const antAbsCenterX = leaf.x + antOffsetX + antDrawWidth / 2;
+         const antAbsCenterY = leaf.y + antOffsetY + antDrawHeight / 2;
+
+         for (let i = raindrops.length - 1; i >= 0; i--) {
+             const drop = raindrops[i]; drop.y += drop.speed;
+             const dropCenterX = drop.x + drop.width / 2; const dropCenterY = drop.y + drop.height / 2;
+             if ( Math.abs(dropCenterX - antAbsCenterX) < (drop.width / 2 + antDrawWidth / 2) && Math.abs(dropCenterY - antAbsCenterY) < (drop.height / 2 + antDrawHeight / 2) ) {
+                 endGame("Soaked by rain!"); return;
+             }
+             if (drop.y - drop.height > H) {
+                 createSplash(drop.x + drop.width / 2, H, drop.speed); raindrops.splice(i, 1);
+             }
+         }
+    }
+    function drawRaindrops() { // Adjust opacity slightly for night view
+         const baseOpacity = isNightView ? 0.8 : 1.0; // Make drops slightly dimmer at night
+         raindrops.forEach(drop => {
+             ctx.fillStyle = `rgba(173, 216, 230, ${drop.opacity * baseOpacity})`; ctx.beginPath();
+             ctx.arc(drop.x + drop.width / 2, drop.y + drop.width / 2, drop.width / 2, Math.PI, 0); ctx.lineTo(drop.x + drop.width, drop.y + drop.height - drop.width / 2); ctx.arc(drop.x + drop.width / 2, drop.y + drop.height - drop.width / 2, drop.width / 2, 0, Math.PI); ctx.lineTo(drop.x, drop.y + drop.width / 2); ctx.closePath(); ctx.fill();
+             ctx.fillStyle = `rgba(255, 255, 255, ${raindropSettings.highlightAlpha * drop.opacity * baseOpacity})`; ctx.beginPath(); ctx.arc(drop.x + drop.width * 0.4, drop.y + drop.width * 0.4, drop.width * 0.2, 0, Math.PI * 2); ctx.fill();
+         });
     }
 
     // --- Twigs ---
@@ -257,26 +270,60 @@
             } else if (twig.y > H) { twigs.splice(i, 1); }
         }
     }
-    function drawTwigs() { /* ... no change ... */
+    function drawTwigs() { // Adjust opacity slightly for night view
+        const baseAlpha = isNightView ? 0.85 : 1.0;
+        ctx.globalAlpha = baseAlpha; // Apply overall alpha for twigs
         twigs.forEach(twig => {
             if (twigImg.complete && twigImg.naturalHeight !== 0) { ctx.drawImage(twigImg, twig.x, twig.y, twigDrawWidth, twigDrawHeight); }
             else { ctx.fillStyle = '#8b4513'; ctx.fillRect(twig.x, twig.y, twigDrawWidth, twigDrawHeight); }
         });
+        ctx.globalAlpha = 1.0; // Reset global alpha
     }
 
     // --- Drawing Functions ---
-    function drawWater() { /* ... no change ... */
-        const gradient = ctx.createLinearGradient(0, 0, 0, H); gradient.addColorStop(0, '#6ca0dc'); gradient.addColorStop(0.6, '#3a7bd5'); gradient.addColorStop(1, '#004e92'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, W, H);
-        waterRipples.forEach(ripple => { ctx.strokeStyle = `rgba(255, 255, 255, ${ripple.opacity})`; ctx.lineWidth = 1.5; ctx.beginPath(); for (let x = 0; x < W; x++) { const waveY = ripple.offsetY + Math.sin(x * ripple.frequency + globalTime * ripple.speed) * ripple.amplitude; if (x === 0) ctx.moveTo(x, waveY); else ctx.lineTo(x, waveY); } ctx.stroke(); });
+    function drawWater() { // Modified for Night View
+        const gradient = ctx.createLinearGradient(0, 0, 0, H);
+        if (isNightView) {
+            // Darker, cooler gradient for night
+            gradient.addColorStop(0, '#2c3e50'); // Midnight Blueish
+            gradient.addColorStop(0.6, '#1a2531');
+            gradient.addColorStop(1, '#0f161f'); // Very dark blue/black
+        } else {
+            // Original day gradient
+            gradient.addColorStop(0, '#6ca0dc'); gradient.addColorStop(0.6, '#3a7bd5'); gradient.addColorStop(1, '#004e92');
+        }
+        ctx.fillStyle = gradient; ctx.fillRect(0, 0, W, H);
+
+        // Ripples (adjust color/opacity for night)
+        const rippleOpacity = isNightView ? 0.15 : 0.3; // Make ripples brighter at night? Or dimmer? Let's try brighter.
+        const rippleColor = `rgba(255, 255, 255, ${rippleOpacity})`;
+        waterRipples.forEach(ripple => {
+            ctx.strokeStyle = rippleColor;
+            ctx.lineWidth = 1.5; ctx.beginPath();
+            for (let x = 0; x < W; x++) {
+                const waveY = ripple.offsetY + Math.sin(x * ripple.frequency + globalTime * ripple.speed) * ripple.amplitude;
+                if (x === 0) ctx.moveTo(x, waveY); else ctx.lineTo(x, waveY);
+            } ctx.stroke();
+        });
     }
-    function drawLeaf() { /* ... no change ... */
+    function drawLeaf() { // Adjust opacity slightly for night view
+        const baseAlpha = isNightView ? 0.9 : 1.0; // Slightly dimmer leaf at night
+        ctx.globalAlpha = baseAlpha;
+
         leaf.drift += 0.02; const tilt = Math.sin(leaf.drift) * 0.05; const bob = Math.sin(leaf.drift * 1.5) * 3; ctx.save(); ctx.translate(leaf.x, leaf.y + bob); ctx.rotate(tilt);
         if (leafImg.complete && leafImg.naturalHeight !== 0) { ctx.drawImage(leafImg, -leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight); }
         else { ctx.fillStyle = 'lime'; ctx.fillRect(-leaf.drawWidth / 2, -leaf.drawHeight / 2, leaf.drawWidth, leaf.drawHeight); } ctx.restore();
+
+        ctx.globalAlpha = 1.0; // Reset global alpha
     }
-    function drawAnt() { /* ... no change ... */
+    function drawAnt() { // Adjust opacity slightly for night view
+        const baseAlpha = isNightView ? 0.9 : 1.0;
+        ctx.globalAlpha = baseAlpha;
+
         if (antImg.complete && antImg.naturalHeight !== 0) { ctx.drawImage(antImg, leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight); }
         else { ctx.fillStyle = '#222'; ctx.fillRect(leaf.x + antOffsetX, leaf.y + antOffsetY, antDrawWidth, antDrawHeight); }
+
+        ctx.globalAlpha = 1.0; // Reset global alpha
     }
 
     // --- Water Effects ---
@@ -295,9 +342,16 @@
     function drawSplashes() { /* ... no change ... */
         splashes.forEach(s => { ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill(); });
     }
-    function drawMist() { /* ... no change ... */
-        ctx.fillStyle = 'rgba(200, 220, 255, 0.03)'; ctx.fillRect(0, 0, W, H);
-    }
+    function drawMist() { // Modified for Night View
+        let mistOpacity = 0.03;
+        let mistColor = 'rgba(200, 220, 255, '; // Day mist
+        if (isNightView) {
+            mistOpacity = 0.05; // Slightly thicker night mist/fog
+            mistColor = 'rgba(50, 60, 100, '; // Dark blueish night mist
+        }
+         ctx.fillStyle = mistColor + mistOpacity + ')';
+         ctx.fillRect(0, 0, W, H);
+     }
 
     // --- Zones ---
     const zones = [ /* ... no change ... */ { name: "🌴 Jungle", overlay: "overlays/zone-border-jungle.png" }, { name: "🌆 Urban Stream", overlay: "overlays/zone-border-urban.png" }, { name: "🌊 Waterfall", overlay: "overlays/zone-border-waterfall.png" }];
@@ -311,15 +365,63 @@
         zoneTimeout = setTimeout(() => { if (running) { zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; setTimeout(cycleZones, 4000); } }, 25000);
     }
 
+    // --- Night View Logic ---
+    function checkNightView() {
+        if (!running) return; // Don't start if game not running
+
+        // Check if night view is already active or recently ended
+        if (!isNightView && Math.random() < 0.05) { // ~5% chance every check interval
+            startNightView();
+        }
+
+        // Schedule next check
+        clearTimeout(nightViewTimer); // Clear previous timer
+        nightViewTimer = setTimeout(checkNightView, 30000); // Check every 30 seconds
+    }
+
+    function startNightView() {
+        if (isNightView) return; // Already night
+        console.log("Night view starting...");
+        isNightView = true;
+        gameContainer.style.boxShadow = "0 0 25px rgba(100, 100, 255, 0.5)"; // Bluish glow at night
+
+        // Set timeout to end night view
+        clearTimeout(nightViewDurationTimeout); // Clear previous end timer
+        nightViewDurationTimeout = setTimeout(endNightView, 20000); // Night lasts 20 seconds
+    }
+
+    function endNightView() {
+        if (!isNightView) return;
+        console.log("Night view ending...");
+        isNightView = false;
+        gameContainer.style.boxShadow = "0 0 20px rgba(0, 206, 201, 0.5)"; // Restore teal glow
+        // No need to clear duration timeout here, it just ran
+    }
+
+
     // --- Game Logic & Rendering ---
-    function resizeCanvas() { /* ... no change ... */
+    function resizeCanvas() {
         const viewportWidth = window.innerWidth; const viewportHeight = window.innerHeight;
         scaleFactor = window.devicePixelRatio || 1; let logicalWidth, logicalHeight;
+
         if (isFullscreen) { logicalWidth = viewportWidth; logicalHeight = viewportHeight; }
         else { const aspectRatio = 16 / 10; logicalWidth = viewportWidth; logicalHeight = viewportWidth / aspectRatio; if (logicalHeight > viewportHeight * 0.95) { logicalHeight = viewportHeight * 0.95; logicalWidth = logicalHeight * aspectRatio; } logicalWidth = Math.min(logicalWidth, viewportWidth * 0.98); logicalHeight = Math.min(logicalHeight, viewportHeight * 0.98); }
+
         gameContainer.style.width = `${logicalWidth}px`; gameContainer.style.height = `${logicalHeight}px`;
         W = logicalWidth; H = logicalHeight; canvas.width = Math.round(W * scaleFactor); canvas.height = Math.round(H * scaleFactor);
         canvas.style.width = `${W}px`; canvas.style.height = `${H}px`; ctx.setTransform(scaleFactor, 0, 0, scaleFactor, 0, 0);
+
+        // --- Calculate Difficulty Factor ---
+        const currentAspectRatio = W / H;
+        if (currentAspectRatio < 1.1) { // If portrait or close to square
+            difficultyFactor = 0.75; // Easier
+             console.log("Difficulty: Easier (Portrait)");
+        } else { // Landscape
+            difficultyFactor = 1.0; // Normal
+             console.log("Difficulty: Normal (Landscape)");
+        }
+        // ---
+
         console.log(`Resized: Fullscreen=${isFullscreen}, Logical=${W.toFixed(0)}x${H.toFixed(0)}, Physical=${canvas.width}x${canvas.height}, DPR=${scaleFactor}`);
         initializeWaterRipples();
         if (!running && !animationFrameId) { resetGame(); drawStaticFrame(); }
@@ -328,33 +430,50 @@
     function drawStaticFrame(){ if (W && H) { drawWater(); drawLeaf(); drawAnt(); } }
     function updateScore() { if (running) { score++; scoreDisplay.innerText = "Score: " + score; } }
 
-    function gameLoop(timestamp) { /* ... no change ... */
+    function gameLoop(timestamp) {
         globalTime = timestamp; t++;
         if (!running && animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; return; }
         if (!running) return;
+
         updateScore(); updateRaindrops(); updateTwigs(); updateSplashes();
+
         drawWater(); drawTwigs(); drawLeaf(); drawAnt(); drawRaindrops(); drawSplashes(); drawMist();
+
         animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     // --- UI Flow & Game State ---
     function showTitle() { introScreen.style.display = "none"; titleScreen.style.display = "flex"; }
-    function startGame() { /* ... no change ... */
+    function startGame() {
         console.log("Starting game..."); titleScreen.style.display = "none"; gameOverScreen.style.display = "none"; scoreDisplay.style.display = "block";
         resetGame(); running = true; startTime = Date.now(); score = 0; scoreDisplay.innerText = "Score: 0";
         bgmAudio.play().catch(e => console.log("BGM play failed:", e)); rainAudio.play().catch(e => console.log("Rain sound play failed:", e));
         bgmAudio.muted = false; rainAudio.muted = false;
-        if (animationFrameId) cancelAnimationFrame(animationFrameId); leaf.x = W / 2; leaf.y = H * 0.7;
-        cycleZones(); animationFrameId = requestAnimationFrame(gameLoop);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        // Initial resize call to set difficulty factor before first frame
+        resizeCanvas();
+        leaf.x = W / 2; leaf.y = H * 0.7;
+
+        cycleZones();
+        checkNightView(); // Start checking for night view transitions
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
-     function resetGame() { /* ... no change ... */
+     function resetGame() {
          console.log("Resetting game state..."); running = false; if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+         // Clear night view timers
+         clearTimeout(nightViewTimer); clearTimeout(nightViewDurationTimeout); isNightView = false;
+         gameContainer.style.boxShadow = "0 0 20px rgba(0, 206, 201, 0.5)"; // Reset glow
+
          if(W && H){ leaf.x = W / 2; leaf.y = H * 0.7; raindrops.length = 0; twigs.length = 0; splashes.length = 0; initializeWaterRipples(); }
          score = 0; t = 0; globalTime = 0; scoreDisplay.innerText = "Score: 0"; clearTimeout(zoneTimeout); zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; zoneLabel.style.opacity = 0;
-         bgmAudio.pause(); rainAudio.pause(); bgmAudio.currentTime = 0; rainAudio.currentTime = 0; // Reset audio position
+         bgmAudio.pause(); rainAudio.pause(); bgmAudio.currentTime = 0; rainAudio.currentTime = 0;
       }
-    function endGame(reason = "Game Over!") { /* ... no change ... */
-         if (!running) return; console.log("Game Over!", reason); running = false; bgmAudio.pause(); rainAudio.pause();
+    function endGame(reason = "Game Over!") {
+         if (!running) return; console.log("Game Over!", reason); running = false;
+         // Clear night view timers
+         clearTimeout(nightViewTimer); clearTimeout(nightViewDurationTimeout);
+
+         bgmAudio.pause(); rainAudio.pause();
          finalScoreDisplay.innerText = `Final Score: ${score}`; gameOverScreen.querySelector('h2').innerText = `💥 ${reason}`; gameOverScreen.style.display = "flex"; clearTimeout(zoneTimeout);
     }
 
@@ -378,7 +497,7 @@
     // --- Event Listeners ---
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
-    fullscreenButton.addEventListener('click', toggleFullScreen); // Listener for button
+    fullscreenButton.addEventListener('click', toggleFullScreen);
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('load', () => { console.log("Window loaded."); resizeCanvas(); });
 
