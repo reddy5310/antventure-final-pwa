@@ -362,7 +362,7 @@
         zoneLeftDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`; zoneRightDiv.style.backgroundImage = `url(${zones[currentZone].overlay})`;
         zoneLeftDiv.style.opacity = 1; zoneRightDiv.style.opacity = 1; zoneLabel.innerText = zones[currentZone].name; zoneLabel.style.opacity = 1;
         setTimeout(() => { if(running) zoneLabel.style.opacity = 0; }, 2000);
-        zoneTimeout = setTimeout(() => { if (running) { zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; setTimeout(cycleZones, 4000); } }, 25000);
+        zoneTimeout = setTimeout(() => { if (running) { zoneLeftDiv.style.opacity = 0; zoneRightDiv.style.opacity = 0; setTimeout(cycleZones, 4000); } }, 8000);
     }
 
     // --- Night View Logic ---
@@ -376,7 +376,7 @@
 
         // Schedule next check
         clearTimeout(nightViewTimer); // Clear previous timer
-        nightViewTimer = setTimeout(checkNightView, 30000); // Check every 30 seconds
+        nightViewTimer = setTimeout(checkNightView, 12000); // Check every 12 seconds
     }
 
     function startNightView() {
@@ -387,7 +387,7 @@
 
         // Set timeout to end night view
         clearTimeout(nightViewDurationTimeout); // Clear previous end timer
-        nightViewDurationTimeout = setTimeout(endNightView, 20000); // Night lasts 20 seconds
+        nightViewDurationTimeout = setTimeout(endNightView, 10000); // Night lasts 10 seconds
     }
 
     function endNightView() {
