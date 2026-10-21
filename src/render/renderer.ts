@@ -1,61 +1,151 @@
-// STUB — the render agent replaces the bodies. Keep the exported signatures.
+// Canvas 2D renderer. Composes the layers back to front:
+//   water → rain ripples → wake → banks/jungle → storm veil + vignette → fireflies →
+//   100 m markers → best flag → obstacles → leaf → ant → drop telegraphs →
+//   effects → rain → floating text → lightning/scrims → hit vignette.
+// Drop telegraphs sit above the leaf and ant on purpose: a drop aimed at the ant
+// must never be hidden under the leaf it is about to hit.
 
-import { ANT_HIT_R, LEAF_H, LEAF_W, WORLD_W } from '../config';
 import type { Viewport } from '../engine/viewport';
-import { riverEdgesAtY } from '../game/river';
 import type { GameEvent, Settings, World } from '../types';
+import { AntArt } from './ant';
+import { Banks } from './banks';
+import { drawDrops } from './drops';
+import { Effects } from './effects';
+import { FlagArt } from './flag';
+import { buildFoliage, buildJungleTile } from './foliage';
+import { Gfx } from './gfx';
+import { LeafArt } from './leaf';
+import { ObstacleArt } from './obstacles';
+import { Water } from './water';
+import { Weather } from './weather';
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
+  private g: Gfx;
+  private banks = new Banks();
+  private water = new Water();
+  private obstacles = new ObstacleArt();
+  private leaf = new LeafArt();
+  private ant = new AntArt();
+  private fx = new Effects();
+  private weather = new Weather();
+  private flag = new FlagArt();
+  private builtPpu = 0;
+  private lastWorld: World | null = null;
+  private lastTime = 0;
+  private bubbleAcc = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
     private viewport: Viewport,
     private getSettings: () => Settings,
   ) {
-    const ctx = canvas.getContext('2d');
+    // Opaque canvas: every pixel is painted each frame, and it lets the browser skip alpha compositing.
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Canvas 2D not supported');
     this.ctx = ctx;
+    this.g = new Gfx(ctx);
+    this.fx.build(ctx);
+    this.resize();
   }
 
-  /** Viewport changed (size / dpr). */
-  resize(): void {}
+  /** Viewport changed (size / dpr): re-render sprites at the new device scale. */
+  resize(): void {
+    const v = this.viewport;
+    const ppu = v.scale * v.dpr;
+    if (Math.abs(ppu - this.builtPpu) < 1e-3) return;
+    this.builtPpu = ppu;
+    const foliage = buildFoliage(ppu);
+    this.banks.build(this.ctx, foliage, buildJungleTile(ppu));
+    this.water.build(this.ctx, ppu, foliage);
+    this.obstacles.build(ppu);
+    this.leaf.build(ppu);
+    this.weather.build(ppu);
+    this.flag.build(ppu);
+  }
 
   /** Spawn transient effects (splashes, floating text, shake…) for a game event. */
-  onEvent(_e: GameEvent, _world: World): void {
-    void this.getSettings;
+  onEvent(e: GameEvent, world: World): void {
+    const reduced = this.getSettings().reducedMotion;
+    this.fx.onEvent(e, world, reduced);
+    if (e.type === 'storm' && world.state !== 'attract') this.weather.onStorm(e.phase, reduced);
   }
 
   /** Clear transient effects (new run / back to menu). */
-  reset(): void {}
+  reset(): void {
+    this.fx.reset();
+    this.leaf.reset();
+    this.ant.reset();
+    this.weather.reset();
+    this.bubbleAcc = 0;
+  }
 
-  render(world: World, _frameDt: number): void {
-    const { ctx, viewport: v } = this;
-    ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
-    ctx.fillStyle = '#123';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.setTransform(v.dpr * v.scale, 0, 0, v.dpr * v.scale, v.dpr * v.originX, 0);
-    for (let y = 0; y < world.viewH; y += 20) {
-      const e = riverEdgesAtY(world, y);
-      ctx.fillStyle = '#2b7bb9';
-      ctx.fillRect(e.left, y, e.right - e.left, 21);
+  render(world: World, frameDt: number): void {
+    const { g, viewport: v, fx } = this;
+    if (world !== this.lastWorld) {
+      this.lastWorld = world;
+      this.lastTime = world.time;
+      this.leaf.reset();
+      this.ant.reset();
     }
-    ctx.strokeStyle = '#fff3';
-    ctx.strokeRect(0, 0, WORLD_W, world.viewH);
-    for (const d of world.drops) {
-      ctx.fillStyle = '#0006';
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, d.r * (d.age / d.fall), 0, Math.PI * 2);
-      ctx.fill();
+    // A running world whose clock didn't move is paused or counting down:
+    // freeze gameplay effects but keep the ambience (rain, shimmer) alive.
+    const frozen = world.state === 'running' && world.time === this.lastTime;
+    this.lastTime = world.time;
+    const dt = Math.min(0.1, Math.max(0, frameDt));
+
+    g.reduced = this.getSettings().reducedMotion;
+    g.dt = dt;
+    g.edt = frozen ? 0 : dt;
+    g.t += dt;
+    g.dpr = v.dpr;
+    g.k = v.dpr * v.scale;
+    g.ppu = g.k;
+    g.cw = this.canvas.width;
+    g.ch = this.canvas.height;
+    g.safeTop = v.safe.top;
+    g.safeBottom = v.safe.bottom;
+    g.viewL = -v.originX / v.scale;
+    g.viewR = g.viewL + v.viewW;
+    g.viewH = v.viewH;
+
+    fx.update(g.edt, dt);
+    const sx = g.reduced ? 0 : fx.shakeX();
+    const sy = g.reduced ? 0 : fx.shakeY();
+    g.ox = v.dpr * v.originX + sx * g.k;
+    g.oy = sy * g.k;
+    g.sampleRiver(world, 48);
+
+    this.ctx.globalAlpha = 1;
+    this.ctx.globalCompositeOperation = 'source-over';
+
+    this.water.draw(g, world);
+    this.weather.update(g, world);
+    this.weather.drawRipples(g);
+    this.leaf.update(g, world);
+    this.leaf.drawWake(g);
+    this.banks.draw(g, world);
+    this.weather.drawTint(g, world);
+    this.weather.drawFireflies(g, world);
+    this.flag.drawMarkers(g, world);
+    this.flag.drawBest(g, world);
+    this.obstacles.draw(g, world);
+    const pose = this.leaf.draw(g, world);
+    this.ant.draw(g, world, pose);
+    drawDrops(g, world);
+
+    // Bubbles rise where the leaf went down.
+    if (pose.sink > 0.6) {
+      this.bubbleAcc += g.edt;
+      if (this.bubbleAcc > 0.3) {
+        this.bubbleAcc = 0;
+        fx.bubble(world.player.x, world.player.y);
+      }
     }
-    const p = world.player;
-    ctx.fillStyle = '#5c5';
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y, LEAF_W / 2, LEAF_H / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#a40';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, ANT_HIT_R, 0, Math.PI * 2);
-    ctx.fill();
+    fx.draw(g);
+    this.weather.drawRain(g, world);
+    fx.drawTexts(g);
+    this.weather.drawOverlay(g);
+    fx.drawVignette(g);
   }
 }

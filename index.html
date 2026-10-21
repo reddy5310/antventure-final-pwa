@@ -1,16 +1,115 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#0b1d26" />
-    <meta name="description" content="Guide a tiny ant on a leaf down a stormy river. Dodge the rain, chain near-misses, beat your best." />
     <title>Antventure: Leaf of Fate</title>
+    <meta
+      name="description"
+      content="Ride a leaf down a stormy jungle river. Read the rain, dodge by a hair, chain near-misses and beat your best. Free, plays offline, with a new Daily River every day."
+    />
+    <meta name="theme-color" content="#0b1d26" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="application-name" content="Antventure" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Antventure" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Social cards. Image URLs are relative here; a production build with
+         SITE_URL set (CI does this) rewrites them to absolute URLs, which the
+         Open Graph and Twitter crawlers require. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Antventure" />
+    <meta property="og:title" content="Antventure: Leaf of Fate" />
+    <meta
+      property="og:description"
+      content="Ride a leaf down a stormy jungle river. Read the rain, dodge by a hair, chain near-misses. Can you beat today's Daily River?"
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A cartoon ant riding a leaf down a stormy jungle river, beside the Antventure wordmark." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Antventure: Leaf of Fate" />
+    <meta name="twitter:description" content="Ride a leaf down a stormy jungle river. Dodge the rain, chain near-misses, beat your best." />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <style>
+      /* Boot paint: the game's backdrop colour from the very first frame, so
+         there is no white flash before the CSS bundle and canvas arrive. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        background: #0b1d26;
+      }
+      #game {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+      }
+      /* Shown only if booting is slow (the delay keeps fast loads clean) and
+         hidden by CSS alone as soon as the UI renders into #ui. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        animation: boot-in 0.4s ease-out 0.45s forwards;
+      }
+      #boot img {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        animation: boot-bob 1.6s ease-in-out infinite;
+      }
+      #ui:not(:empty) ~ #boot {
+        display: none;
+      }
+      @keyframes boot-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes boot-bob {
+        50% {
+          transform: translateY(-6px) rotate(-4deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot img {
+          animation: none;
+        }
+      }
+      noscript p {
+        position: fixed;
+        inset: auto 16px 40%;
+        margin: 0;
+        text-align: center;
+        font: 600 18px/1.4 system-ui, sans-serif;
+        color: #f4f1e8;
+      }
+    </style>
   </head>
   <body>
     <canvas id="game" aria-label="Antventure game view"></canvas>
     <div id="ui"></div>
-    <noscript>Antventure needs JavaScript to run.</noscript>
+    <div id="boot" aria-hidden="true"><img src="/icons/favicon.svg" alt="" width="72" height="72" /></div>
+    <noscript><p>Antventure needs JavaScript to run.</p></noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

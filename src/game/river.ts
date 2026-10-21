@@ -16,15 +16,19 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Water edges at river distance `d` (units downstream from the start). */
 export function riverEdgesAt(seed: number, d: number): RiverEdges {
+  return riverEdgesInto(seed, d, { left: 0, right: 0 });
+}
+
+/** Allocation-free riverEdgesAt for hot loops: writes into and returns `out`. */
+export function riverEdgesInto(seed: number, d: number, out: RiverEdges): RiverEdges {
   const p = clamp(d / RIVER_NARROW_DIST, 0, 1);
   const ease = p * p * (3 - 2 * p);
   const halfWidth = lerp(178, 128, ease) + noise1(seed ^ 0x51ed, d * 0.0021) * lerp(8, 22, ease);
   const sway = noise1(seed ^ 0xa11ce, d * 0.0011) * lerp(6, 46, ease);
   const centre = WORLD_W / 2 + sway;
-  return {
-    left: clamp(centre - halfWidth, 6, WORLD_W / 2 - 80),
-    right: clamp(centre + halfWidth, WORLD_W / 2 + 80, WORLD_W - 6),
-  };
+  out.left = clamp(centre - halfWidth, 6, WORLD_W / 2 - 80);
+  out.right = clamp(centre + halfWidth, WORLD_W / 2 + 80, WORLD_W - 6);
+  return out;
 }
 
 /** River distance at view-space y (things higher up are further downstream-to-come). */

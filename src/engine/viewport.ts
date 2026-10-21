@@ -29,7 +29,13 @@ export interface Viewport {
   safe: Insets;
 }
 
-const MAX_DPR = 2.5;
+/**
+ * Backing-store density cap. Phones report 2.6-3.5, but the flat art looks the
+ * same at 2 and the renderer has several full-screen passes (water, caustics,
+ * storm veil, scrims): 2 instead of 3 is ~55% fewer pixels to fill per pass,
+ * which is what keeps mid-range phones at 60 fps. The DOM UI stays native-sharp.
+ */
+const MAX_DPR = 2;
 
 function readSafeInsets(probe: HTMLElement): Insets {
   const cs = getComputedStyle(probe);

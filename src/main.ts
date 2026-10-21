@@ -48,6 +48,8 @@ const input = new Input(canvas, viewport, () => settings.sensitivity);
 let scene: Scene = 'menu';
 let world: World = makeAttractWorld();
 let runDaily: DailyInfo | null = null;
+/** The current run's result is on the boards (exactly once per run). */
+let runRecorded = false;
 let countdown = 0;
 let countdownShown: number | null = null;
 let tutorial: { stage: TutorialHint; t: number; moved: number; lastX: number } | null = null;
@@ -99,8 +101,27 @@ function titleInfo(): TitleInfo {
   };
 }
 
+/**
+ * Saves a finished run to the boards, once. A run counts from the moment the
+ * ant dies, so retrying or quitting during the death animation (before the
+ * game-over screen) still records it. Abandoned live runs are not recorded.
+ */
+function recordRunOnce(): storage.RecordResult | null {
+  if (runRecorded || (world.state !== 'dying' && world.state !== 'over')) return null;
+  runRecorded = true;
+  return storage.recordRun(summarize(world));
+}
+
+/** Called before a run is replaced: keeps a run that already ended from vanishing. */
+function saveEndedRun(): void {
+  const result = recordRunOnce();
+  if (result?.isBest) ui.toast(`New best saved · ${result.entry.score.toLocaleString()} pts`, { ms: 2200 });
+}
+
 function startRun(mode: Mode): void {
   audio.unlock();
+  saveEndedRun();
+  runRecorded = false;
   runDaily = mode === 'daily' ? dailyInfo() : null;
   const dailyId = runDaily?.id ?? null;
   const best = storage.getBest(mode, dailyId);
@@ -153,6 +174,8 @@ function finishRun(): void {
   input.steeringEnabled = false;
   if (tutorial) endTutorial();
   const summary = summarize(world);
+  // game-over fires once per world and a replaced world never reaches it, so this is the first record.
+  runRecorded = true;
   const result = storage.recordRun(summary);
   ui.showGameOver({
     summary,
@@ -166,6 +189,7 @@ function finishRun(): void {
 }
 
 function toMenu(): void {
+  saveEndedRun();
   scene = 'menu';
   input.steeringEnabled = false;
   countdown = 0;
@@ -255,11 +279,17 @@ input.onAction((action) => {
       else if (scene === 'paused') resume();
       break;
     case 'pause':
+      // P / gamepad Start. Outside a run it is the gamer's "go" button:
+      // play from the title, instant retry from the game-over screen.
       if (ui.handleBack()) return;
       if (scene === 'run') pause();
       else if (scene === 'paused') resume();
+      else if (ui.isModalOpen()) return;
+      else if (scene === 'menu') startRun('endless');
+      else if (scene === 'over') startRun(world.mode);
       break;
     case 'back':
+      // Esc / gamepad B: close the top modal, else step back one screen.
       if (ui.handleBack()) return;
       if (scene === 'run') pause();
       else if (scene === 'paused') resume();
@@ -392,6 +422,9 @@ window.__ant = {
     return settings;
   },
   viewport,
+  get ui() {
+    return ui;
+  },
   play: startRun,
   pause,
   resume,
@@ -399,5 +432,13 @@ window.__ant = {
   storage,
 };
 
-ui.showTitle(titleInfo());
-audio.setScene('menu');
+// Launch links (the manifest's "Daily River" shortcut): ?mode=daily jumps
+// straight into today's river. The query is dropped so a reload lands on the title.
+const launchMode = new URLSearchParams(location.search).get('mode');
+if (launchMode) history.replaceState(history.state, '', location.pathname + location.hash);
+if (launchMode === 'daily' || launchMode === 'endless') {
+  startRun(launchMode);
+} else {
+  ui.showTitle(titleInfo());
+  audio.setScene('menu');
+}
