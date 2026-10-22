@@ -91,16 +91,22 @@ function drawScene(c: CanvasRenderingContext2D, seed: number): void {
     c.stroke();
   }
 
-  // A few raindrop telegraphs: shadow disc + closing ring, like in the game.
+  // A few raindrop telegraphs like in the game: a pale rain circle with a dashed
+  // rim (never a dark disc, which reads as a rock) and the closing ring.
   for (let i = 0; i < 5; i++) {
     const x = RIVER_L + 90 + r() * (RIVER_R - RIVER_L - 180);
     const y = 820 + r() * 330;
     if (Math.abs(x - W / 2) < 120 && y > 960) continue;
     const rr = 34 + r() * 14;
-    c.fillStyle = 'rgba(4, 22, 30, 0.45)';
+    c.fillStyle = 'rgba(159, 224, 255, 0.22)';
     c.beginPath();
     c.arc(x, y, rr, 0, Math.PI * 2);
     c.fill();
+    c.setLineDash([14, 10]);
+    c.lineWidth = 4;
+    c.strokeStyle = 'rgba(210, 243, 255, 0.85)';
+    c.stroke();
+    c.setLineDash([]);
     c.lineWidth = 6;
     c.strokeStyle = 'rgba(4, 22, 30, 0.6)';
     c.beginPath();

@@ -127,24 +127,26 @@ function rainMarkup(cx: number, cy: number, r: number, mode: 'anim' | 'still'): 
 }
 
 /**
- * A warm river stone, drawn at (dx, dy): cast shadow, a darker side face under
- * the top face (so it stands up out of the water), moss, a crack, and the V
- * wake of foam that streams past it. Spans roughly x 10..48, y 20..62.
+ * A warm river stone, drawn at (dx, dy): a cast shadow to the lower right, a
+ * darker side face under the top face (so it stands up out of the water), a
+ * lit facet, moss and a crack, and the V of foam that streams away from its
+ * shoulders. Spans roughly x 10..48, y 10..62.
  */
 function rockMarkup(dx: number, dy: number): string {
-  const body = 'M14 46c-1-8 5-15 13-16 8-1 15 4 17 11 2 7-2 14-10 16-9 2-19 0-20-11z';
+  const body = 'M13 46L17 36L26 30L37 31L44 38L46 48L39 55L26 57L16 53Z';
   return `<g transform="translate(${dx} ${dy})">
-    <ellipse cx="34" cy="60" rx="17" ry="4.6" fill="${C.ringDark}" opacity=".28"/>
+    <ellipse cx="37" cy="61" rx="17" ry="4.4" fill="${C.ringDark}" opacity=".3"/>
     <g stroke="${C.foam}" stroke-linecap="round" fill="none">
-      <path d="M15 39q-3-3-4-9M43 37q3-3 4-9" stroke-width="2.2" opacity=".9"/>
-      <path d="M11 30q-1-4 0-8M47 28q1-4 0-8" stroke-width="1.6" opacity=".45"/>
+      <path d="M23 33Q18 25 13 18M37 33Q42 25 45 18" stroke-width="2.2" opacity=".9"/>
+      <path d="M13 18Q11 15 10.5 12M45 18Q46.5 15 47.5 12" stroke-width="1.6" opacity=".45"/>
     </g>
-    <path d="${body}" transform="translate(2.6 4)" fill="${C.rockSide}" stroke="${C.rockDark}" stroke-width="1.8" stroke-linejoin="round"/>
-    <path d="${body}" fill="${C.rock}" stroke="${C.rockDark}" stroke-width="1.8" stroke-linejoin="round"/>
-    <path d="M17 42c1-6 5-10 11-11-2 4-6 8-11 11z" fill="${C.rockLight}"/>
-    <path d="M20 37c2-3 5-5 8-5" stroke="${C.rockTop}" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".85"/>
-    <path d="M18 51c3 2.4 7 3 11 2-3 2.4-8 2.4-11-2z" fill="${C.moss}"/>
-    <path d="M33 38l3 5-2 4" stroke="${C.rockDark}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".6"/>
+    <path d="${body}" transform="translate(0 4.5)" fill="${C.rockSide}" stroke="${C.rockDark}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${body}" fill="${C.rock}" stroke="${C.rockDark}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M16 53L26 57L39 55L46 48L40 46L28 50Z" fill="${C.rockDark}" opacity=".28"/>
+    <path d="M19 38L26 33L36 34L41 40L30 42Z" fill="${C.rockLight}" opacity=".9"/>
+    <path d="M19.5 37.6L26 33.2L33 33.6" stroke="${C.rockTop}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".9"/>
+    <path d="M18 49c3 3 8 4 12 3-3 3-9 3-12-3z" fill="${C.moss}"/>
+    <path d="M35 43l3 4-2 4" stroke="${C.rockDark}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".65"/>
   </g>`;
 }
 
