@@ -20,6 +20,10 @@ import type {
   Mode,
   Settings,
   Sfx,
+  SkinId,
+  MetaInfo,
+  AchievementView,
+  MissionView,
   TitleInfo,
   TutorialHint,
   World,
@@ -53,11 +57,18 @@ export interface UIHandlers {
   onUserGesture(): void;
   /** UI sound effects (tap, back…). */
   onSfx(sfx: Sfx): void;
+  /** Phase 3 shop: returns true if bought / equipped. */
+  onBuySkin(id: SkinId): boolean;
+  onEquipSkin(id: SkinId): boolean;
 }
 
 export interface UIContext {
   getSettings(): Settings;
   getDevice(): Device;
+  /** Fresh Phase 3 snapshot (wallet, streak, missions, skins). */
+  getMeta(): MetaInfo;
+  /** Every achievement for the badges screen. */
+  getAchievements(): AchievementView[];
 }
 
 export interface ToastOptions {
@@ -195,6 +206,11 @@ export class UI {
     this.mount('over', over.el);
     this.over = over;
     over.focusPrimary();
+  }
+
+  /** STUB — the UI agent implements: a mission completed mid-run (small pill + announce). */
+  missionComplete(mission: MissionView): void {
+    void mission;
   }
 
   showTutorial(hint: TutorialHint): void {

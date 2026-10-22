@@ -3,7 +3,7 @@
 // hurt flash, invulnerability shield and death flailing. Dark body + light
 // outline glints keep it readable on the light-green leaf by luminance alone.
 
-import type { World } from '../types';
+import type { Skin, World } from '../types';
 import type { Gfx } from './gfx';
 import type { LeafPose } from './leaf';
 import { P } from './palette';
@@ -29,6 +29,11 @@ export class AntArt {
   private walk = 0;
   private lookX = 0;
   private lookY = -1;
+
+  /** STUB — the skins agent implements: draw with this skin's palette from now on. */
+  setSkin(skin: Skin): void {
+    void skin;
+  }
 
   reset(): void {
     this.walk = 0;

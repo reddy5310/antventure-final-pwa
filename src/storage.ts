@@ -27,11 +27,27 @@ interface SaveData {
   dailyFirst: Record<string, number>;
   stats: LifetimeStats;
   /**
-   * Crumbs to spend in Phase 3's shop. Every run adds what it collected;
-   * nothing takes any away yet, so for now it tracks stats.totalCrumbs (which
-   * stays a lifetime total once spending exists).
+   * Crumbs to spend in the shop: every run adds what it collected, rewards add
+   * bonuses, purchases subtract. stats.totalCrumbs stays the lifetime total.
    */
   wallet: number;
+  /** Phase 3 progression (streak, skins, badges, missions). */
+  meta: MetaSave;
+}
+
+/** Phase 3 progression as saved. src/meta/ owns the rules; this only stores and validates. */
+export interface MetaSave {
+  /** last: local date id (YYYY-MM-DD) of the last finished run, '' if none. */
+  streak: { last: string; count: number; best: number };
+  /** Skin ids owned ('classic' always included) and the one worn. */
+  owned: string[];
+  equipped: string;
+  /** Achievement id → ISO date it was unlocked. */
+  badges: Record<string, string>;
+  /** Lifetime counters the achievements need beyond LifetimeStats. */
+  counters: Record<string, number>;
+  /** Today's mission progress; reset when `day` is not today. */
+  missions: { day: string; progress: Record<string, number>; done: string[] };
 }
 
 function prefersReducedMotion(): boolean {
@@ -64,6 +80,18 @@ function freshData(): SaveData {
     dailyFirst: {},
     stats: { runs: 0, totalDistanceM: 0, totalNearMisses: 0, bestCombo: 0, totalCrumbs: 0 },
     wallet: 0,
+    meta: freshMeta(),
+  };
+}
+
+function freshMeta(): MetaSave {
+  return {
+    streak: { last: '', count: 0, best: 0 },
+    owned: ['classic'],
+    equipped: 'classic',
+    badges: {},
+    counters: {},
+    missions: { day: '', progress: {}, done: [] },
   };
 }
 
@@ -116,6 +144,42 @@ function cleanBoards(raw: unknown): Record<string, ScoreEntry[]> {
   return out;
 }
 
+const DAY_ID = /^\d{4}-\d{2}-\d{2}$/;
+const ITEM_ID = /^[a-z0-9-]{1,32}$/;
+
+function cleanIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) if (typeof v === 'string' && ITEM_ID.test(v) && !out.includes(v)) out.push(v);
+  return out;
+}
+
+function cleanMeta(raw: unknown): MetaSave {
+  const m = freshMeta();
+  if (!isObj(raw)) return m;
+  const st = isObj(raw.streak) ? raw.streak : {};
+  m.streak = {
+    last: typeof st.last === 'string' && DAY_ID.test(st.last) ? st.last : '',
+    count: Math.floor(num(st.count, 0, 0, 100000)),
+    best: Math.floor(num(st.best, 0, 0, 100000)),
+  };
+  m.streak.best = Math.max(m.streak.best, m.streak.count);
+  const owned = cleanIds(raw.owned);
+  m.owned = owned.includes('classic') ? owned : ['classic', ...owned];
+  m.equipped = typeof raw.equipped === 'string' && m.owned.includes(raw.equipped) ? raw.equipped : 'classic';
+  if (isObj(raw.badges)) {
+    for (const [k, v] of Object.entries(raw.badges)) if (ITEM_ID.test(k) && typeof v === 'string') m.badges[k] = v.slice(0, 40);
+  }
+  m.counters = cleanCounts(raw.counters);
+  const ms = isObj(raw.missions) ? raw.missions : {};
+  m.missions = {
+    day: typeof ms.day === 'string' && DAY_ID.test(ms.day) ? ms.day : '',
+    progress: cleanCounts(ms.progress),
+    done: cleanIds(ms.done),
+  };
+  return m;
+}
+
 function cleanCounts(raw: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (!isObj(raw)) return out;
@@ -164,7 +228,9 @@ function load(): SaveData {
       dailyAttempts: cleanCounts(parsed.dailyAttempts),
       dailyFirst: cleanCounts(parsed.dailyFirst),
       stats: cleanStats(parsed.stats),
-      wallet: Math.floor(num(parsed.wallet, 0, 0)),
+      // Saves from before the wallet existed start with every crumb ever collected.
+      wallet: Math.floor(num(parsed.wallet, cleanStats(parsed.stats).totalCrumbs, 0)),
+      meta: cleanMeta(parsed.meta),
     };
   } catch {
     // Unreadable (blocked storage, corrupt JSON): keep what this tab has.
@@ -294,6 +360,47 @@ export function getStats(): LifetimeStats {
 /** Crumbs available to spend (Phase 3). */
 export function getWallet(): number {
   return data.wallet;
+}
+
+// --- Phase 3: progression (rules live in src/meta/) --------------------------
+
+const copyMeta = (m: MetaSave): MetaSave => JSON.parse(JSON.stringify(m)) as MetaSave;
+
+export function getMeta(): MetaSave {
+  return copyMeta(data.meta);
+}
+
+/**
+ * Atomic progression update: re-reads the save (another tab may have written),
+ * lets `fn` edit a copy, validates it, and credits the crumbs `fn` returns.
+ */
+export function updateMeta(fn: (meta: MetaSave) => number | void): { meta: MetaSave; wallet: number } {
+  sync();
+  const draft = copyMeta(data.meta);
+  const credit = fn(draft);
+  data.meta = cleanMeta(draft);
+  if (typeof credit === 'number' && Number.isFinite(credit) && credit > 0) data.wallet += Math.floor(credit);
+  persist();
+  return { meta: copyMeta(data.meta), wallet: data.wallet };
+}
+
+/** Buys a skin if affordable and not owned. Never takes the wallet below 0. */
+export function buySkin(id: string, price: number): boolean {
+  sync();
+  const cost = Math.floor(price);
+  if (!ITEM_ID.test(id) || data.meta.owned.includes(id) || !(cost >= 0) || data.wallet < cost) return false;
+  data.wallet -= cost;
+  data.meta.owned.push(id);
+  persist();
+  return true;
+}
+
+export function equipSkin(id: string): boolean {
+  sync();
+  if (!data.meta.owned.includes(id)) return false;
+  data.meta.equipped = id;
+  persist();
+  return true;
 }
 
 export interface RecordResult {

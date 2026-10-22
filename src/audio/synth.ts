@@ -526,6 +526,45 @@ export const SFX: Record<Sfx, SfxSpec> = {
     },
   },
 
+  // PLACEHOLDER — replaced by the UI/audio agent.
+  purchase: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 900, t, perc(g.gain, t, 0.002, 0.3, 0.1), g);
+      glide(o.frequency, t, 900, 1600, 0.08);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the UI/audio agent.
+  mission: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 700, t, perc(g.gain, t, 0.002, 0.3, 0.1), g);
+      glide(o.frequency, t, 700, 1400, 0.08);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the UI/audio agent.
+  achievement: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 520, t, perc(g.gain, t, 0.002, 0.3, 0.1), g);
+      glide(o.frequency, t, 520, 1560, 0.08);
+    },
+  },
+
   tap: {
     level: 0.6,
     send: 0,
