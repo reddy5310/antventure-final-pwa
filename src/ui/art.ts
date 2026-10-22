@@ -16,13 +16,18 @@ const C = {
   water: '#167686',
   waterLight: '#5fcab9',
   waterDeep: '#0e5467',
-  shadow: '#03101a',
   ring: '#f6fcff',
+  ringDark: '#020d15',
   dropBody: '#d8f1ff',
+  rainFill: '#9fe0ff',
+  rainRim: '#d2f3ff',
   foam: '#eafffa',
-  rockDark: '#38434c',
-  rock: '#5f6c76',
-  rockLight: '#8e9ca6',
+  // Warm river stone, the same family as the canvas rocks (render/palette).
+  rockDark: '#3a2f28',
+  rockSide: '#55463b',
+  rock: '#7c6957',
+  rockLight: '#a8927a',
+  rockTop: '#d8c8aa',
   moss: '#5c9a48',
   bark: '#6e4a2d',
   barkLight: '#a07448',
@@ -100,14 +105,59 @@ function crumbMarkup(x: number, y: number, s: number): string {
   </g>`;
 }
 
-export type Illustration = 'shadows' | 'near-miss' | 'obstacles' | 'hearts' | 'crumbs' | 'daily';
+/**
+ * A rain circle like the canvas telegraph: pale water, a dashed light rim on a
+ * thin dark under-stroke (a zone, never a solid thing) and a teardrop in the
+ * middle, plus the closing ring. 'anim' animates the ring and the teardrop (CSS);
+ * 'still' freezes the ring a little outside the rim, so both stay visible.
+ */
+function rainMarkup(cx: number, cy: number, r: number, mode: 'anim' | 'still'): string {
+  const ty = cy - r * 0.42;
+  const close = mode === 'anim' ? ' class="ill-close"' : '';
+  const rr = mode === 'anim' ? r : r + 3.5;
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${C.rainFill}" fill-opacity=".38"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.ringDark}" stroke-opacity=".4" stroke-width="3.4"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.rainRim}" stroke-width="1.8" stroke-dasharray="4.2 3.2" stroke-linecap="round"/>
+    <circle${close} cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${C.ringDark}" stroke-opacity=".5" stroke-width="4.4"/>
+    <circle${close} cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${C.ring}" stroke-width="2.4"/>
+    <g${mode === 'anim' ? ' class="ill-grow"' : ''}>
+      <path d="M${cx} ${ty}c3 3.8 5.2 6.2 5.2 9a5.2 5.2 0 0 1-10.4 0c0-2.8 2.2-5.2 5.2-9z" fill="${C.dropBody}" stroke="${C.ringDark}" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M${cx - 2.4} ${ty + 10}a3 3 0 0 1 .8-2.6" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+    </g>`;
+}
+
+/**
+ * A warm river stone, drawn at (dx, dy): cast shadow, a darker side face under
+ * the top face (so it stands up out of the water), moss, a crack, and the V
+ * wake of foam that streams past it. Spans roughly x 10..48, y 20..62.
+ */
+function rockMarkup(dx: number, dy: number): string {
+  const body = 'M14 46c-1-8 5-15 13-16 8-1 15 4 17 11 2 7-2 14-10 16-9 2-19 0-20-11z';
+  return `<g transform="translate(${dx} ${dy})">
+    <ellipse cx="34" cy="60" rx="17" ry="4.6" fill="${C.ringDark}" opacity=".28"/>
+    <g stroke="${C.foam}" stroke-linecap="round" fill="none">
+      <path d="M15 39q-3-3-4-9M43 37q3-3 4-9" stroke-width="2.2" opacity=".9"/>
+      <path d="M11 30q-1-4 0-8M47 28q1-4 0-8" stroke-width="1.6" opacity=".45"/>
+    </g>
+    <path d="${body}" transform="translate(2.6 4)" fill="${C.rockSide}" stroke="${C.rockDark}" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="${body}" fill="${C.rock}" stroke="${C.rockDark}" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M17 42c1-6 5-10 11-11-2 4-6 8-11 11z" fill="${C.rockLight}"/>
+    <path d="M20 37c2-3 5-5 8-5" stroke="${C.rockTop}" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".85"/>
+    <path d="M18 51c3 2.4 7 3 11 2-3 2.4-8 2.4-11-2z" fill="${C.moss}"/>
+    <path d="M33 38l3 5-2 4" stroke="${C.rockDark}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".6"/>
+  </g>`;
+}
+
+export type Illustration = 'rain-vs-rock' | 'shadows' | 'near-miss' | 'obstacles' | 'hearts' | 'crumbs' | 'daily';
 
 const SCENES: Record<Illustration, string> = {
+  // Rain on the left, rock on the right: the two things players mixed up, side by side.
+  'rain-vs-rock': `${WATER_BG}
+    ${rainMarkup(26, 38, 15, 'still')}
+    <path d="M48 12v48" stroke="#fff" stroke-opacity=".3" stroke-width="1.4" stroke-dasharray="2 3.2" stroke-linecap="round"/>
+    ${rockMarkup(44, -4)}`,
   shadows: `${WATER_BG}
-    <circle cx="38" cy="44" r="17" fill="${C.shadow}" opacity=".5"/>
-    <circle cx="38" cy="44" r="17" fill="none" stroke="${C.ring}" stroke-opacity=".5" stroke-width="1.2"/>
-    <circle class="ill-close" cx="38" cy="44" r="17" fill="none" stroke="${C.ring}" stroke-width="2.6"/>
-    <path class="ill-fall" d="M38 6c3 4 5 6.6 5 9.4a5 5 0 0 1-10 0c0-2.8 2-5.4 5-9.4z" fill="${C.dropBody}" stroke="${C.waterDeep}" stroke-width="1.2"/>
+    ${rainMarkup(38, 44, 17, 'anim')}
     ${leafMarkup(76, 48, 0.36, -8)}
     ${antMarkup(75, 47, 0.42)}`,
   'near-miss': `${WATER_BG}
@@ -118,9 +168,7 @@ const SCENES: Record<Illustration, string> = {
     <path d="M56 17c.4 3 1.6 4.8 5 6.5-3.4 1.7-4.6 3.5-5 6.5-.4-3-1.6-4.8-5-6.5 3.4-1.7 4.6-3.5 5-6.5z" fill="${C.gold}"/>
     <text x="64" y="21" fill="${C.gold}" font-size="13" font-weight="700" stroke="#3a2300" stroke-width="3" paint-order="stroke">+25</text>`,
   obstacles: `${WATER_BG}
-    <path d="M14 50l5-13 10-7 11 2 7 9 1 9z" fill="${C.rock}" stroke="${C.rockDark}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M20 38l9-6 10 2 4 5c-8-2-16-2-23-1z" fill="${C.rockLight}"/>
-    <path d="M24 33c3-3 8-3 11-1-4 1-8 1-11 1z" fill="${C.moss}"/>
+    ${rockMarkup(-2, -3)}
     <g transform="rotate(-24 68 40)">
       <rect x="48" y="35" width="42" height="10" rx="5" fill="${C.bark}" stroke="${C.barkDark}" stroke-width="2"/>
       <path d="M54 38.5h26" stroke="${C.barkLight}" stroke-width="2" stroke-linecap="round"/>

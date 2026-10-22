@@ -83,6 +83,9 @@ html[data-input='mouse'][data-screen='run'] #game {
   --pk-honey: #ffb82e;
   --pk-ladybug: #ff8cb4;
   --pk-firefly: #ceff5c;
+  /* Hazard hints: rain matches the canvas rain circle, rock the warm river stone. */
+  --pk-rain: #9fe0ff;
+  --pk-rock: #cdb18a;
   --zone-jungle: #74c64a;
   --zone-marsh: #5fcab9;
   --zone-rapids: #cfe6ff;
@@ -1919,6 +1922,14 @@ html[data-input='mouse'][data-screen='run'] #game {
   color: var(--zone-marsh);
 }
 
+.pk-hint-icon[data-kind='rain'] {
+  color: var(--pk-rain);
+}
+
+.pk-hint-icon[data-kind='rock'] {
+  color: var(--pk-rock);
+}
+
 .pk-hint-icon .icon {
   width: 22px;
   height: 22px;
@@ -2026,20 +2037,44 @@ html[data-input='mouse'][data-screen='run'] #game {
 }
 
 .tut-shadow-fill,
-.tut-shadow-ring {
+.tut-shadow-ring,
+.tut-shadow-drop {
   grid-area: 1 / 1;
+}
+
+.tut-shadow-fill,
+.tut-shadow-ring {
   width: 38px;
   height: 38px;
   border-radius: 50%;
 }
 
+/* The in-game rain circle: pale blue water with a dashed light rim (a zone, never a solid thing). */
 .tut-shadow-fill {
-  background: rgba(3, 16, 26, 0.6);
+  background: rgba(159, 224, 255, 0.42);
+  border: 2px dashed #d2f3ff;
+  animation: tut-spin 14s linear infinite;
 }
 
+/* The closing ring is the timer: light, with the thin dark outline the canvas gives it. */
 .tut-shadow-ring {
-  border: 2.5px solid rgba(246, 252, 255, 0.9);
+  border: 2.5px solid rgba(246, 252, 255, 0.95);
+  box-shadow:
+    0 0 0 1.5px rgba(2, 13, 21, 0.45),
+    inset 0 0 0 1.5px rgba(2, 13, 21, 0.3);
   animation: tut-close 1.5s ease-in infinite;
+}
+
+/* A small teardrop: a square with one sharp corner, turned so the point faces up. */
+.tut-shadow-drop {
+  width: 11px;
+  height: 11px;
+  margin-top: 2px;
+  border-radius: 0 50% 50% 50%;
+  background: #e4f6ff;
+  border: 1.5px solid rgba(2, 13, 21, 0.7);
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.9);
+  transform: rotate(45deg);
 }
 
 .tut-copy {
@@ -3030,8 +3065,10 @@ html[data-input='mouse'][data-screen='run'] #game {
   animation: ill-close 1.8s ease-in infinite;
 }
 
-.ill-fall {
-  animation: ill-fall 1.8s ease-in infinite;
+.ill-grow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ill-grow 1.8s ease-in infinite;
 }
 
 /* --- Responsive ----------------------------------------------------------------------------- */
@@ -3333,21 +3370,20 @@ html[data-input='mouse'][data-screen='run'] #game {
   }
 }
 
-@keyframes ill-fall {
+/* The teardrop swells as the ring closes, like the one in the rain circle on the canvas. */
+@keyframes ill-grow {
   0% {
-    transform: translateY(-6px);
-    opacity: 0;
+    transform: scale(0.6);
   }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    transform: translateY(24px);
-    opacity: 1;
-  }
+  85%,
   100% {
-    transform: translateY(28px);
-    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes tut-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

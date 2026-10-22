@@ -29,8 +29,8 @@ const SPRAY_N = 10;
  * from it without a gradient (which would allocate every frame).
  */
 const WAKE_CUT = [1, 0.64, 0.32];
-const WAKE_ALPHA = [0.26, 0.3, 0.36];
-const WAKE_WIDTH = [1.6, 2.3, 3.1];
+const WAKE_ALPHA = [0.3, 0.34, 0.4];
+const WAKE_WIDTH = [1.8, 2.6, 3.5];
 
 /**
  * Rock variant `i` as a stone seen from above, lit from the upper left. The
@@ -311,10 +311,10 @@ export class ObstacleArt {
     ctx.lineCap = 'round';
     // Slack water in the rock's lee: a tall, narrow shade trailing up the screen.
     // An ellipse well taller than wide, never a disc (a round dark patch read as a rain circle).
-    ctx.globalAlpha = fade * 0.2;
+    ctx.globalAlpha = fade * 0.15;
     ctx.fillStyle = '#041a24';
     ctx.beginPath();
-    ctx.ellipse(x + 1.5, y - r * 1.05, r * 0.55, r * 1.3, 0, 0, TAU);
+    ctx.ellipse(x + 1.5, y - r * 1.2, r * 0.5, r * 1.5, 0, 0, TAU);
     ctx.fill();
     // Short ripple arcs on the downstream (upper) side, tucked between the wake's arms.
     ctx.strokeStyle = P.foam;
@@ -343,12 +343,13 @@ export class ObstacleArt {
       ctx.beginPath();
       for (let side = -1; side <= 1; side += 2) {
         const w = side < 0 ? swayL : swayR;
-        const p0x = x + side * r * 0.98;
-        const p0y = y - r * 0.08;
-        const cx = x + side * r * 1.12 + w * 0.5;
-        const cy = y - r * 0.9;
+        // Starts just outside the widest point, where the bow wave's ends sweep round to meet it.
+        const p0x = x + side * r * 1.1;
+        const p0y = y + r * 0.12;
+        const cx = x + side * r * 1.2 + w * 0.5;
+        const cy = y - r * 0.75;
         const p2x = x + side * r * 1.78 + w;
-        const p2y = y - r * 1.5;
+        const p2y = y - r * 1.4;
         // The first `u` of the quadratic: its control point and end (de Casteljau).
         const a = (1 - u) * (1 - u);
         const b = 2 * u * (1 - u);
@@ -364,12 +365,12 @@ export class ObstacleArt {
     ctx.globalAlpha = fade * (0.36 + Math.sin(t * 4 + ph) * 0.08);
     ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.arc(x, y, r * 1.2 + Math.sin(t * 3.3 + ph) * 0.8, Math.PI * (0.06 + bw), Math.PI * (0.94 + bw));
+    ctx.arc(x, y, r * 1.2 + Math.sin(t * 3.3 + ph) * 0.8, Math.PI * (0.02 + bw), Math.PI * (0.98 + bw));
     ctx.stroke();
     ctx.globalAlpha = fade * 0.82;
     ctx.lineWidth = 3.6;
     ctx.beginPath();
-    ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * (0.16 + bw), Math.PI * (0.84 + bw));
+    ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * (0.1 + bw), Math.PI * (0.9 + bw));
     ctx.stroke();
     ctx.globalAlpha = fade * 0.4;
     ctx.lineWidth = 5.4;
