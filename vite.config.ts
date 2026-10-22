@@ -113,5 +113,8 @@ export default defineConfig({
     // Playwright specs live in tests/e2e and must not be collected by Vitest.
     include: ['tests/unit/**/*.test.ts', 'src/**/*.test.ts'],
     environment: 'node',
+    // The balance and fairness tests simulate dozens of full runs; ~4 s on a
+    // dev machine is past the 5 s default on 2-core CI runners.
+    testTimeout: 30_000,
   },
 });
