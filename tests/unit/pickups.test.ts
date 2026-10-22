@@ -851,6 +851,24 @@ describe('collecting', () => {
     expect(k.y - w.player.y).toBeCloseTo(rel + 2 * w.scrollSpeed * SIM_DT, 3);
   });
 
+  it('re-anchors pickups the moment the view is resized, before any step (paused or counting down)', () => {
+    // Rotating a phone pauses the game: no steps run, yet the pickups must stay
+    // where they are relative to the leaf and to the rocks that were shifted with them.
+    const w = newRun();
+    const k = put(w, 'crumb', 80, -200);
+    step(w, 5);
+    stepWorld(w, NONE, SIM_DT);
+    const rock = injectRock(w, k.x + 30, distOf(w, k.y), 20);
+    const relPickup = k.y - w.player.y;
+    const relRock = rock.y - w.player.y;
+    setViewHeight(w, 1100);
+    expect(k.y - w.player.y).toBeCloseTo(relPickup, 6);
+    expect(rock.y - w.player.y).toBeCloseTo(relRock, 6);
+    setViewHeight(w, 640);
+    expect(k.y - w.player.y).toBeCloseTo(relPickup, 6);
+    expect(k.y - rock.y).toBeCloseTo(relPickup - relRock, 6);
+  });
+
   it('puts crumbs and zones in the run summary', () => {
     const w = newRun();
     put(w, 'crumb', 0);

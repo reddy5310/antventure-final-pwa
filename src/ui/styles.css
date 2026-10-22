@@ -1485,8 +1485,13 @@ html[data-input='mouse'][data-screen='run'] #game {
   }
 }
 
-/* Very narrow phones: keep the pill clear of the power-up column on the right. */
+/* Very narrow phones: keep the pill clear of the power-up column on the right
+   (about 50 px wide): the pill centres in what is left instead of the full width. */
 @media (max-width: 340px) {
+  .banners {
+    padding-right: 56px;
+  }
+
   .banner {
     gap: 6px;
     padding-right: 12px;
@@ -1494,7 +1499,6 @@ html[data-input='mouse'][data-screen='run'] #game {
 
   .banner-title {
     font-size: 16px;
-    letter-spacing: 0;
   }
 }
 
