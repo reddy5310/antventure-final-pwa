@@ -77,6 +77,17 @@ html[data-input='mouse'][data-screen='run'] #game {
   --water-light: #5fcab9;
   --rain: #cfe6ff;
 
+  /* Phase 2 accents: pickups match the canvas bubbles (render/pickups.ts), zones their look. */
+  --pk-crumb: #ffe296;
+  --pk-mushroom: #ff6a5e;
+  --pk-honey: #ffb82e;
+  --pk-ladybug: #ff8cb4;
+  --pk-firefly: #ceff5c;
+  --zone-jungle: #74c64a;
+  --zone-marsh: #5fcab9;
+  --zone-rapids: #cfe6ff;
+  --zone-night: #ffd977;
+
   --radius-sm: 12px;
   --radius: 18px;
   --radius-lg: 26px;
@@ -95,6 +106,8 @@ html[data-input='mouse'][data-screen='run'] #game {
   --hs: 1;
   /* Width of each jungle gutter beside the river (set from JS). */
   --gw: 0px;
+  /* Where banners sit: just under the tallest HUD column (hearts, three chips). */
+  --banner-top: calc(var(--safe-t) + 132px * var(--hs));
 
   position: fixed;
   inset: 0;
@@ -428,6 +441,10 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .stats-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stats-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .stat {
@@ -1189,6 +1206,100 @@ html[data-input='mouse'][data-screen='run'] #game {
   color: var(--coral-light);
 }
 
+/* Crumbs this run. */
+.hud-crumbs .hud-chip-icon {
+  color: var(--pk-crumb);
+}
+
+/* A zone that pays extra (the Rapids): the bonus, for as long as it lasts. */
+.hud-pay {
+  color: var(--zone-rapids);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px rgba(207, 230, 255, 0.4);
+}
+
+.hud-pay-icon {
+  display: inline-flex;
+}
+
+/* Active power-ups: one icon with a radial timer each, in the right-hand column
+   under the pause button (over the river bank, not over the river). */
+.hud-powers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.power {
+  --pk: var(--text);
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(38px * var(--hs));
+  height: calc(38px * var(--hs));
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--pk);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.power[data-kind='mushroom'] {
+  --pk: var(--pk-mushroom);
+}
+
+.power[data-kind='honey'] {
+  --pk: var(--pk-honey);
+}
+
+.power[data-kind='firefly'] {
+  --pk: var(--pk-firefly);
+}
+
+.power-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.power-ring-bg,
+.power-ring-fg {
+  fill: none;
+  stroke-width: 3.6;
+}
+
+.power-ring-bg {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+
+/* pathLength=100 on the circle: the offset is "percent used", set from JS in steps. */
+.power-ring-fg {
+  stroke: var(--pk);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.power-icon.icon {
+  width: 52%;
+  height: 52%;
+}
+
+/* The last seconds: the ring turns warning-coloured (also with reduced motion) and blinks. */
+.power.is-ending .power-ring-fg {
+  stroke: var(--coral-light);
+}
+
+.power.is-ending {
+  animation: power-blink 0.5s ease-in-out infinite;
+}
+
 /* Wide screens: arcade side panels. Score, combo and pace hug the river's left
    bank, hearts and pause its right bank, sized for a desk-distance glance. */
 .ui-root[data-layout='wide'] .hud-bar {
@@ -1282,13 +1393,24 @@ html[data-input='mouse'][data-screen='run'] #game {
   margin-left: 24px;
 }
 
+.ui-root[data-layout='wide'] .hud-powers {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.ui-root[data-layout='wide'] .power {
+  width: clamp(46px, 6.2vh, 66px);
+  height: clamp(46px, 6.2vh, 66px);
+}
+
 /* --- Banners ------------------------------------------------------------------------ */
 
 /* One compact, slightly see-through pill at a time, just under the HUD: the
    river ahead (where hazards come from) stays readable. */
 .banners {
   position: absolute;
-  top: calc(var(--safe-t) + 104px * var(--hs));
+  top: var(--banner-top);
   left: 0;
   right: 0;
   display: grid;
@@ -1360,6 +1482,23 @@ html[data-input='mouse'][data-screen='run'] #game {
 @media (max-width: 430px) {
   .banner-sub {
     display: none;
+  }
+}
+
+/* Very narrow phones: keep the pill clear of the power-up column on the right
+   (about 50 px wide): the pill centres in what is left instead of the full width. */
+@media (max-width: 340px) {
+  .banners {
+    padding-right: 56px;
+  }
+
+  .banner {
+    gap: 6px;
+    padding-right: 12px;
+  }
+
+  .banner-title {
+    font-size: 16px;
   }
 }
 
@@ -1468,6 +1607,115 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .banner-warn .banner-icon .icon path {
   fill: currentColor;
+}
+
+/* A new zone: the icon colour says where you are headed. */
+.banner-zone .banner-title {
+  letter-spacing: 0.03em;
+}
+
+.banner-zone .banner-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.banner-zone[data-zone='jungle'] .banner-icon {
+  background: var(--leaf);
+  color: var(--leaf-ink);
+}
+
+.banner-zone[data-zone='marsh'] {
+  border-color: rgba(95, 202, 185, 0.5);
+}
+
+.banner-zone[data-zone='marsh'] .banner-icon {
+  background: var(--zone-marsh);
+  color: #06303a;
+}
+
+.banner-zone[data-zone='rapids'] {
+  border-color: rgba(207, 230, 255, 0.5);
+}
+
+.banner-zone[data-zone='rapids'] .banner-icon {
+  background: var(--zone-rapids);
+  color: #0a2140;
+}
+
+.banner-zone[data-zone='rapids'] .banner-title {
+  letter-spacing: 0.06em;
+}
+
+.banner-zone[data-zone='night'] {
+  background: linear-gradient(90deg, rgba(20, 22, 62, 0.95), rgba(10, 14, 40, 0.95));
+  border-color: rgba(255, 217, 119, 0.45);
+}
+
+.banner-zone[data-zone='night'] .banner-icon {
+  background: rgba(255, 217, 119, 0.18);
+  color: var(--zone-night);
+}
+
+.banner-zone[data-zone='night'] .banner-sub {
+  color: #cfd3ff;
+}
+
+/* Quick confirmations under the banner slot ("Perfect trail!", "Blocked!"). */
+.pills {
+  position: absolute;
+  top: calc(var(--banner-top) + 54px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--gutter);
+  pointer-events: none;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 13px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  animation: banner-in 0.22s var(--ease-spring) both;
+}
+
+.pill.is-out {
+  animation: banner-out 0.2s ease-in both;
+}
+
+.pill-icon.icon {
+  width: 18px;
+  height: 18px;
+}
+
+.pill-detail {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill-trail {
+  color: var(--pk-crumb);
+  border-color: rgba(255, 226, 150, 0.45);
+}
+
+.pill-block {
+  color: var(--pk-mushroom);
+  border-color: rgba(255, 106, 94, 0.5);
+}
+
+.pill-block .pill-text {
+  color: #fff;
 }
 
 /* --- Countdown ------------------------------------------------------------------------ */
@@ -1613,6 +1861,71 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .tutorial.is-out {
   animation: toast-out 0.2s ease-in both;
+}
+
+/* First time a power-up shows up: one line near the bottom, never blocking. */
+.ui-root:not([data-screen='run']) .pk-hint {
+  visibility: hidden;
+}
+
+.pk-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, 100%);
+  padding: 6px 16px 6px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--glass-strong);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  font-size: 14.5px;
+  line-height: 1.25;
+  text-align: left;
+  animation: toast-in 0.24s var(--ease-out) both;
+}
+
+.pk-hint.is-out {
+  animation: toast-out 0.2s ease-in both;
+}
+
+.pk-hint-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.pk-hint-icon[data-kind='mushroom'] {
+  color: var(--pk-mushroom);
+}
+
+.pk-hint-icon[data-kind='honey'] {
+  color: var(--pk-honey);
+}
+
+.pk-hint-icon[data-kind='ladybug'] {
+  color: var(--pk-ladybug);
+}
+
+.pk-hint-icon[data-kind='firefly'] {
+  color: var(--pk-firefly);
+}
+
+.pk-hint-icon[data-kind='pad'] {
+  color: var(--zone-marsh);
+}
+
+.pk-hint-icon .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.pk-hint-text strong {
+  font-weight: 700;
 }
 
 .tut-visual {
@@ -1826,6 +2139,60 @@ html[data-input='mouse'][data-screen='run'] #game {
   background: var(--fill-soft);
   color: var(--text-dim);
   font-weight: 600;
+}
+
+/* Game over: what the run collected and how far down the river it got. */
+.over-extras {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.over-extra {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 14px;
+  background: var(--fill-soft);
+}
+
+.over-extra-icon.icon {
+  width: 24px;
+  height: 24px;
+}
+
+.over-extra.is-crumbs .over-extra-icon {
+  color: var(--pk-crumb);
+}
+
+.over-extra.is-zones .over-extra-icon {
+  color: var(--zone-rapids);
+}
+
+.over-extra-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.over-extra-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.over-extra-label {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .over-tip {
@@ -2484,6 +2851,93 @@ html[data-input='mouse'][data-screen='run'] #game {
   color: var(--text-dim);
 }
 
+/* Help: power-up and zone lists (icon badge, name, one line). */
+.help-list-card .help-text {
+  margin-bottom: 4px;
+}
+
+.help-list {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 4px;
+}
+
+.help-badge {
+  --pk: var(--text);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pk) 55%, transparent);
+  color: var(--pk);
+}
+
+.help-badge .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.help-badge[data-kind='mushroom'] {
+  --pk: var(--pk-mushroom);
+}
+
+.help-badge[data-kind='honey'] {
+  --pk: var(--pk-honey);
+}
+
+.help-badge[data-kind='ladybug'] {
+  --pk: var(--pk-ladybug);
+}
+
+.help-badge[data-kind='firefly'] {
+  --pk: var(--pk-firefly);
+}
+
+.help-badge[data-zone='jungle'] {
+  --pk: var(--zone-jungle);
+}
+
+.help-badge[data-zone='marsh'] {
+  --pk: var(--zone-marsh);
+}
+
+.help-badge[data-zone='rapids'] {
+  --pk: var(--zone-rapids);
+}
+
+.help-badge[data-zone='night'] {
+  --pk: var(--zone-night);
+}
+
+.help-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.help-item-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.help-item-how {
+  font-size: 13px;
+  line-height: 1.32;
+  color: var(--text-dim);
+}
+
 .device-list {
   display: grid;
   gap: 4px;
@@ -2667,8 +3121,8 @@ html[data-input='mouse'][data-screen='run'] #game {
     padding: 26px 26px 22px;
   }
 
-  .banners {
-    top: calc(var(--safe-t) + 116px * var(--hs));
+  .ui-root {
+    --banner-top: calc(var(--safe-t) + 144px * var(--hs));
   }
 }
 
@@ -2678,6 +3132,15 @@ html[data-input='mouse'][data-screen='run'] #game {
   right: auto;
   width: var(--gw);
   justify-items: end;
+  padding: 0 40px 0 16px;
+}
+
+/* ...and so do the pills, just below them. */
+.ui-root[data-layout='wide'] .pills {
+  top: calc(var(--safe-t) + 46vh + 56px);
+  right: auto;
+  width: var(--gw);
+  align-items: flex-end;
   padding: 0 40px 0 16px;
 }
 
@@ -2765,6 +3228,12 @@ html[data-input='mouse'][data-screen='run'] #game {
   }
   70% {
     translate: -3px 0;
+  }
+}
+
+@keyframes power-blink {
+  50% {
+    opacity: 0.35;
   }
 }
 

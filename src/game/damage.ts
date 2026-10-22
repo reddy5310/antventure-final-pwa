@@ -4,8 +4,11 @@ import type { HitSource, World } from '../types';
 import { breakCombo } from './scoring';
 import type { SimState } from './state';
 import { HURT_TIME, INVULN_TIME, WET_PER_HIT } from './tuning';
+import { absorbHit } from './powers';
 
 export function applyHit(world: World, st: SimState, source: HitSource, x: number, y: number): void {
+  // A mushroom cap takes the hit instead (no heart lost, combo kept).
+  if (absorbHit(world, x, y, source)) return;
   const p = world.player;
   p.hearts = Math.max(0, p.hearts - 1);
   p.invuln = INVULN_TIME;

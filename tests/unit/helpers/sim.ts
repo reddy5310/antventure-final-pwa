@@ -68,6 +68,12 @@ export interface BotOptions {
   margin?: number;
   /** Seconds between re-plans. */
   decisionDt?: number;
+  /**
+   * Treat lily pads as open water. They are soft bumpers that never hurt, so a
+   * human is free to ignore them; the stock bot dodges them like rocks, which
+   * understates how gentle the Marsh is.
+   */
+  ignorePads?: boolean;
 }
 
 /**
@@ -80,6 +86,7 @@ export function createDodgeBot(options: BotOptions = {}): Controller {
   const reaction = options.reaction ?? 0.2;
   const margin = options.margin ?? 4;
   const decisionDt = options.decisionDt ?? 1 / 30;
+  const ignorePads = options.ignorePads ?? false;
   const hazards: Hazard[] = [];
   let target = NaN;
   let sinceDecision = Infinity;
@@ -99,6 +106,7 @@ export function createDodgeBot(options: BotOptions = {}): Controller {
     }
     for (const o of world.obstacles) {
       if (o.hit || o.y < -40) continue;
+      if (ignorePads && o.kind === 'pad') continue;
       const ry = o.kind === 'rock' ? o.r + LEAF_HIT_R : o.len + o.r + LEAF_HIT_R;
       const t0 = (p.y - ry - o.y) / v;
       const t1 = (p.y + ry - o.y) / v;

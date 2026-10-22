@@ -9,6 +9,7 @@ import { focusEl, h, setChildren } from '../dom';
 import type { UIEnv } from '../env';
 import { fmtInt, fmtMeters, fmtMult } from '../format';
 import { icon } from '../icons';
+import { ZONE_INFO } from '../pickupinfo';
 
 /** Runs shorter than this (s) restart at once: nothing much to lose. */
 export const RESTART_CONFIRM_AFTER = 15;
@@ -38,11 +39,13 @@ export class PauseScreen {
     const stats = world
       ? h(
           'div',
-          { class: 'stats stats-4' },
+          { class: 'stats stats-6' },
           stat('Score', fmtInt(Math.floor(world.score))),
           stat('Distance', fmtMeters(Math.floor(world.distance / UNITS_PER_METER))),
+          stat('Crumbs', fmtInt(world.crumbs)),
           stat('Near-misses', fmtInt(world.nearMisses)),
           stat('Multiplier', fmtMult(world.multiplier)),
+          stat('Zone', ZONE_INFO[world.zone].name),
         )
       : null;
 

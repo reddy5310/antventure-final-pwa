@@ -29,6 +29,7 @@ export function buildShareText(s: RunSummary, daily: DailyInfo | null, ctx?: Par
   if (s.nearMisses > 0) parts.push(plural(s.nearMisses, 'near-miss', 'near-misses'));
   // "chain", not "×N combo": × is the score multiplier (max ×5).
   if (s.maxCombo > 1) parts.push(`${fmtInt(s.maxCombo)} chain`);
+  if (s.crumbs > 0) parts.push(plural(s.crumbs, 'crumb'));
   lines.push(parts.join(' · '));
   if (daily && ctx?.attempts && ctx.attempts > 1) {
     const first = ctx.firstTry !== null && ctx.firstTry !== undefined ? ` · first try ${fmtInt(ctx.firstTry)}` : '';

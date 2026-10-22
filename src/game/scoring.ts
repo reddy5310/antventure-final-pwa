@@ -1,24 +1,36 @@
 // Score, near-miss combos and progress events.
-//   score = metres × multiplier + near-miss bonuses × multiplier
+//   score = (metres + near-miss bonuses + crumbs) × multiplier × zone pay
 //   multiplier = 1 + COMBO_STEP × min(combo, COMBO_CAP)   (x1 … x5)
+//   zone pay   = the zone's points bonus (zones.ts): 1 almost everywhere, more
+//                in the Rapids, which cost more hits per minute
 
 import { UNITS_PER_METER } from '../config';
 import type { World } from '../types';
 import type { SimState } from './state';
 import { COMBO_CAP, COMBO_STEP, COMBO_TIME, MILESTONE_M, NEAR_MISS_POINTS } from './tuning';
+import { currentZoneMods } from './zones';
 
 export function multiplierFor(combo: number): number {
   return 1 + COMBO_STEP * Math.min(combo, COMBO_CAP);
 }
 
+/**
+ * What a base point is worth right now: the chain's multiplier times the
+ * zone's pay. Everything the run earns goes through this, so a bonus zone
+ * scales distance, near-misses, crumbs and bonuses alike.
+ */
+export function payFactor(world: World): number {
+  return world.multiplier * currentZoneMods(world).pay;
+}
+
 /** Distance points: 1 per metre, multiplied. Kept fractional; summaries floor it. */
 export function addDistanceScore(world: World, units: number): void {
-  world.score += (units / UNITS_PER_METER) * world.multiplier;
+  world.score += (units / UNITS_PER_METER) * payFactor(world);
 }
 
 export function registerNearMiss(world: World, x: number, y: number): void {
   // Paid at the multiplier the player had earned so far, then the combo grows.
-  const points = Math.round(NEAR_MISS_POINTS * world.multiplier);
+  const points = Math.round(NEAR_MISS_POINTS * payFactor(world));
   world.score += points;
   world.combo++;
   world.comboTimer = COMBO_TIME;

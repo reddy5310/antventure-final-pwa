@@ -169,7 +169,8 @@ describe('hearts and invulnerability', () => {
     const x0 = p.x;
     const ev = step(w, 1);
     expect(ev).toContainEqual(expect.objectContaining({ type: 'hit', source: 'rock' }));
-    expect(w.obstacles[0].hit).toBe(true);
+    // By id: the layout looks far ahead, so other obstacles may already be in the list.
+    expect(w.obstacles.find((o) => o.id === 999)?.hit).toBe(true);
     expect(p.targetX).toBeGreaterThan(x0 + 10);
     // Still overlapping on later steps (and after invulnerability): no second hit.
     p.invuln = 0;

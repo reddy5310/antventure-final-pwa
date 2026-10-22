@@ -14,6 +14,14 @@ export type StormPhase = 'calm' | 'drizzle' | 'downpour' | 'cloudburst';
 
 export type HitSource = 'drop' | 'rock' | 'twig';
 
+/** River zones, laid out by distance (src/game/zones.ts). */
+export type ZoneId = 'jungle' | 'marsh' | 'rapids' | 'night';
+
+export type PickupKind = 'crumb' | 'mushroom' | 'honey' | 'ladybug' | 'firefly';
+
+/** Pickups with a timed effect (the ladybug is instant). */
+export type PowerKind = 'mushroom' | 'honey' | 'firefly';
+
 export type Device = 'touch' | 'mouse' | 'keyboard' | 'gamepad';
 
 export interface Player {
@@ -50,7 +58,8 @@ export interface Drop {
   aimed: boolean;
 }
 
-export type ObstacleKind = 'rock' | 'twig';
+/** 'pad' = lily pad (Lily Marsh): a soft bumper that pushes the leaf, never damages. */
+export type ObstacleKind = 'rock' | 'twig' | 'pad';
 
 export interface Obstacle {
   id: number;
@@ -72,6 +81,28 @@ export interface Obstacle {
   hit: boolean;
 }
 
+/** A collectible floating on the river (scrolls with it, like obstacles). */
+export interface Pickup {
+  id: number;
+  kind: PickupKind;
+  x: number;
+  y: number;
+  /** Crumb trail id (for the Perfect-trail bonus); 0 for power-ups. */
+  trail: number;
+  /** Collected this run; renderer may animate it out, sim removes it soon after. */
+  taken: boolean;
+  /** 0..1, stable per pickup, for render variety. */
+  variant: number;
+}
+
+export interface ActivePower {
+  kind: PowerKind;
+  /** Seconds left. */
+  left: number;
+  /** Full duration (for HUD timer rings). */
+  total: number;
+}
+
 export type GameEvent =
   | { type: 'start' }
   | { type: 'drop-impact'; x: number; y: number; r: number; onLeaf: boolean }
@@ -83,7 +114,18 @@ export type GameEvent =
   | { type: 'new-best' }
   | { type: 'storm'; phase: StormPhase }
   | { type: 'death'; x: number; y: number }
-  | { type: 'game-over' };
+  | { type: 'game-over' }
+  | { type: 'zone'; zone: ZoneId }
+  /** points: score added (0 for the instant ladybug heal); streak: crumbs taken in a row in this trail. */
+  | { type: 'pickup'; kind: PickupKind; x: number; y: number; points: number; streak: number }
+  | { type: 'trail-complete'; x: number; y: number; points: number }
+  | { type: 'power-start'; kind: PowerKind; duration: number }
+  | { type: 'power-end'; kind: PowerKind }
+  /** The mushroom cap absorbed a hit. */
+  | { type: 'shield-block'; x: number; y: number; source: HitSource }
+  /** Ladybug restored a heart. */
+  | { type: 'heal'; hearts: number }
+  | { type: 'pad-bump'; x: number; y: number };
 
 export interface World {
   mode: Mode;
@@ -128,6 +170,23 @@ export interface World {
   nextId: number;
   /** Filled by stepWorld; drained by main after every step. */
   events: GameEvent[];
+
+  // --- Phase 2 -------------------------------------------------------------
+  /** Zone at the leaf. */
+  zone: ZoneId;
+  /** Zone being blended towards (equals zone outside transitions). */
+  nextZone: ZoneId;
+  /** 0..1 blend from zone to nextZone at the leaf. */
+  zoneBlend: number;
+  /** Zones entered this run, counting the opening Jungle (summary + game over). */
+  zonesReached: number;
+  pickups: Pickup[];
+  /** Crumbs collected this run. */
+  crumbs: number;
+  /** Active timed power-ups (at most one per kind). */
+  powers: ActivePower[];
+  /** 0 = daylight .. 1 = full night darkness at the leaf (renderer + firefly). */
+  darkness: number;
 }
 
 /** Per-step steering input. */
@@ -172,6 +231,7 @@ export interface LifetimeStats {
   totalDistanceM: number;
   totalNearMisses: number;
   bestCombo: number;
+  totalCrumbs: number;
 }
 
 export interface RunSummary {
@@ -186,6 +246,8 @@ export interface RunSummary {
   hitsTaken: number;
   /** What took the last heart; null for a run that did not end in death. */
   killedBy: HitSource | null;
+  crumbs: number;
+  zonesReached: number;
 }
 
 export interface DailyInfo {
@@ -228,7 +290,15 @@ export type Sfx =
   | 'milestone'
   | 'new-best'
   | 'thunder'
-  | 'death';
+  | 'death'
+  | 'crumb'
+  | 'trail'
+  | 'power'
+  | 'power-end'
+  | 'shield'
+  | 'heart-up'
+  | 'zone'
+  | 'pad';
 
 export type AudioScene = 'menu' | 'run' | 'paused' | 'over';
 

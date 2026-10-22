@@ -12,12 +12,15 @@
 
 import { ANT_HIT_R, LEAF_HIT_R } from '../config';
 import type { Obstacle, World } from '../types';
+import { isRound, obstacleExtent } from './collision';
 import { reachIn } from './player';
 import { riverEdgesInto, type RiverEdges } from './river';
 import type { DropBatch, SimState } from './state';
 import { BANK_MARGIN, HIT_PAD, KEY_SPEED, MIN_SAFE_WIDTH, REACH_SAFETY, REACTION } from './tuning';
+import { createZoneMods, ZONES, zoneModsAt } from './zones';
 
 const edges: RiverEdges = { left: 0, right: 0 };
+const zoneScratch = createZoneMods();
 
 /** Seconds before the leaf can respond to something new (reaction + steering lag). */
 export const RESPONSE_LAG = REACTION + 0.08;
@@ -41,15 +44,60 @@ export function dropHalfWidth(dy: number, r: number): number {
   return Math.sqrt(R * R - dy * dy);
 }
 
+// --- Zone speed ------------------------------------------------------------------
+// Rapids and Lily Marsh change how fast the water carries everything, and
+// the change is blended in over BLEND_M metres. The sweep below turns
+// "this thing is N units upstream" into "it gets here in T seconds", so it
+// must not assume today's speed lasts: entering the Rapids it would think a
+// rock a second away arrives up to ~100 ms later than it does, nearly half a
+// human's reaction time.
+
+function zoneScroll(world: World, d: number): number {
+  return zoneModsAt(world.seed, d, zoneScratch).scroll;
+}
+
+/** Fastest zone over slowest (Rapids over Marsh today): bounds how much sooner than at today's speed anything can arrive. */
+const MAX_SPEED_RATIO = Math.max(...Object.values(ZONES).map((z) => z.scroll)) / Math.min(...Object.values(ZONES).map((z) => z.scroll));
+
+/**
+ * Average river speed over the next `dist` units, relative to the speed now.
+ * 1 whenever the zone does not change on the way (the common case).
+ */
+function speedRatio(world: World, dist: number, zNow: number): number {
+  return dist > 0 ? zoneScroll(world, world.distance + 0.5 * dist) / zNow : 1;
+}
+
+/**
+ * How far the water will carry things in the next `t` seconds (units),
+ * including the speed change of a zone transition on the way. Drops and
+ * obstacles scroll by exactly this much, so it is how far upstream to start
+ * something that should land on the leaf's row `t` seconds from now.
+ */
+export function expectedTravel(world: World, t: number): number {
+  const straight = world.scrollSpeed * t;
+  if (straight <= 0) return 0;
+  return straight * speedRatio(world, straight, zoneScroll(world, world.distance));
+}
+
+/**
+ * Seconds until something `dist` units upstream of the leaf's row has been
+ * carried onto it (the inverse of expectedTravel, same speed change included).
+ */
+export function timeToRow(world: World, dist: number): number {
+  if (dist <= 0) return 0;
+  const v = Math.max(1, world.scrollSpeed);
+  return dist / (v * speedRatio(world, dist, zoneScroll(world, world.distance)));
+}
+
 /** Vertical reach of an obstacle against the leaf circle. */
 function obstacleRy(o: Obstacle): number {
-  return o.kind === 'rock' ? o.r + LEAF_HIT_R : o.len + o.r + LEAF_HIT_R;
+  return obstacleExtent(o) + LEAF_HIT_R;
 }
 
 /** Horizontal half-width it blocks for the leaf centre at `t` seconds from now (conservative for twigs). */
 function obstacleRx(o: Obstacle, t: number): number {
-  const base = o.kind === 'rock' ? o.r + LEAF_HIT_R : o.len + o.r + LEAF_HIT_R + Math.abs(o.vx) * Math.max(0, t);
-  return base + HIT_PAD;
+  const drift = isRound(o) ? 0 : Math.abs(o.vx) * Math.max(0, t);
+  return obstacleExtent(o) + LEAF_HIT_R + drift + HIT_PAD;
 }
 
 // --- Event list ------------------------------------------------------------------
@@ -66,13 +114,15 @@ function pushEvent(st: SimState, n: number, t: number, x0: number, x1: number): 
 function collectEvents(world: World, st: SimState, batch: DropBatch, fall: number, tEnd: number): number {
   const p = world.player;
   const v = world.scrollSpeed;
+  const zNow = zoneScroll(world, world.distance);
   let n = 0;
 
   for (let i = 0; i < world.drops.length; i++) {
     const d = world.drops[i];
     const tau = d.fall - d.age;
     if (tau < 0 || tau > tEnd) continue;
-    const h = dropHalfWidth(d.y + v * tau - p.y, d.r);
+    const run = v * tau;
+    const h = dropHalfWidth(d.y + run * speedRatio(world, run, zNow) - p.y, d.r);
     if (h > 0) n = pushEvent(st, n, tau, d.x - h, d.x + h);
   }
 
@@ -84,10 +134,18 @@ function collectEvents(world: World, st: SimState, batch: DropBatch, fall: numbe
   const vv = Math.max(1, v);
   for (let i = 0; i < world.obstacles.length; i++) {
     const o = world.obstacles[i];
+    // Lily pads count as walls too, though they never hurt: they shove the
+    // leaf aside (obstacles.ts padContact), so a resting spot inside a pad's
+    // reach is not a spot the leaf can keep, and a splash beside a pad must
+    // not rely on it. Only rocks and twigs that already hit are done.
     if (o.hit) continue;
     const ry = obstacleRy(o);
-    const ta = Math.max(0, (p.y - ry - o.y) / vv);
-    const tb = Math.min(tEnd, (p.y + ry - o.y) / vv);
+    const toRow = p.y - o.y;
+    // Quick reject for what cannot arrive within the window even at the fastest zone.
+    if ((toRow - ry) / (vv * MAX_SPEED_RATIO) > tEnd) continue;
+    const vo = vv * speedRatio(world, toRow, zNow);
+    const ta = Math.max(0, (toRow - ry) / vo);
+    const tb = Math.min(tEnd, (toRow + ry) / vo);
     if (tb < ta) continue;
     const steps = Math.ceil((tb - ta) / OBSTACLE_SAMPLE);
     for (let k = 0; k <= steps; k++) {

@@ -137,7 +137,15 @@ export class TitleScreen {
 
     const st = info.stats;
     const statsLine = st.runs
-      ? `${plural(st.runs, 'run')} · ${fmtDistance(st.totalDistanceM)} · ${plural(st.totalNearMisses, 'near-miss', 'near-misses')}`
+      ? [
+          plural(st.runs, 'run'),
+          fmtDistance(st.totalDistanceM),
+          plural(st.totalNearMisses, 'near-miss', 'near-misses'),
+          // Crumbs are Phase 3's currency: the lifetime count is already worth showing.
+          st.totalCrumbs > 0 ? plural(st.totalCrumbs, 'crumb') : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
       : 'Dodge the rain. Chain near-misses. Beat your best.';
 
     this.el = h(

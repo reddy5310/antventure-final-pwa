@@ -3,19 +3,34 @@
 // flecks) and the foam that laps the waterline. Decorations are deliberately
 // light, green or warm and never dark-disc-with-ring shaped, so nothing here can
 // be mistaken for a raindrop telegraph.
+//
+// Zones restyle the same water: a colour wash that follows the zone along the
+// river (jade Marsh, dark Rapids, blue-black Night), and per-zone extras that
+// fade in with the zone's weight at each river distance: duckweed and many lily
+// pads in the Marsh, fast white-water chop and standing waves in the Rapids,
+// moon glints at Night. Everything is placed by river distance, so the next
+// zone's water is already there as it scrolls into view.
 
 import { WORLD_W } from '../config';
 import type { World } from '../types';
 import type { FoliageSprites } from './foliage';
 import { RIVER_STEP, type Gfx } from './gfx';
-import { P } from './palette';
+import { P, ZONE_TINTS, ZP } from './palette';
 import { TAU, frac, hash, makeRand } from './util';
+import { EdgeWeights, frameLook, strokeWeighted, ZoneWash, type ZoneLook } from './zonelook';
 
 const STREAK_SLOT = 19;
 const LILY_SLOT = 62;
 const PETAL_SLOT = 44;
 const FLECK_SLOT = 17;
 const FOAM_DASH = [4, 9];
+const BUBBLE_DASH = [0.1, 7];
+const CHOP_SLOT = 15;
+const CREST_SLOT = 62;
+const GLINT_SLOT = 20;
+const DUCK_SLOT = 13;
+const MARSH_LILY_SLOT = 26;
+const MARSH_FAR_LILY_SLOT = 88;
 /** Water tile period (units): two caustic periods, tall enough that the baked deep pools don't visibly repeat. */
 const BASE_H = 480;
 const CAUSTIC_T = 240;
@@ -154,6 +169,11 @@ export class Water {
   private c2Pattern: CanvasPattern | null = null;
   private m = new DOMMatrix();
   private f: FoliageSprites | null = null;
+  private wash = new ZoneWash(ZONE_TINTS.water);
+  private rapids = new EdgeWeights();
+  private marsh = new EdgeWeights();
+  /** Surface drift clock: runs faster in the Rapids and slower in the Marsh, without ever jumping. */
+  private flow = 0;
 
   build(ctx: CanvasRenderingContext2D, ppu: number, foliage: FoliageSprites): void {
     this.f = foliage;
@@ -174,11 +194,14 @@ export class Water {
   draw(g: Gfx, world: World): void {
     const { ctx } = g;
     const seed = world.seed;
+    const look = frameLook(g);
+    this.flow += g.dt * (1 + 2.4 * look.weightAt('rapids', g.dist) - 0.4 * look.weightAt('marsh', g.dist));
     g.world();
     this.drawSurface(g);
+    this.rapids.fill(g, look, 'rapids');
+    this.marsh.fill(g, look, 'marsh');
 
     // Shallows along each bank, then the bank's own shade at the very edge.
-    g.world();
     ctx.lineJoin = 'round';
     ctx.globalAlpha = 0.55;
     ctx.strokeStyle = P.waterShallow;
@@ -190,9 +213,22 @@ export class Water {
     ctx.lineWidth = 9;
     ctx.stroke();
     ctx.globalAlpha = 1;
+    // The zone's colour over all of it (Jungle water is the baseline), blended along the river.
+    this.wash.fillRect(g, look, -30, -30, WORLD_W + 60, g.viewH + 60);
+    if (this.marsh.any) {
+      // Marsh banks shelve gently: a broad, pale band of shallows.
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = ZP.marshShallow;
+      ctx.lineWidth = 78;
+      strokeWeighted(g, this.marsh, 0, 0, 0.16);
+      ctx.lineCap = 'round';
+    }
 
-    this.drawStreaks(g, seed);
-    this.drawDecor(g, seed);
+    this.drawStreaks(g, seed, look);
+    this.drawDecor(g, seed, look);
+    if (this.marsh.any) this.drawMarsh(g, seed, look);
+    if (this.rapids.any) this.drawWhitewater(g, seed, look);
+    if (look.involves('night')) this.drawGlints(g, seed, look);
     this.drawFoam(g);
   }
 
@@ -211,7 +247,7 @@ export class Water {
     m.d = 1 / k;
     if (this.base && this.basePattern) {
       m.e = g.alignX(0);
-      m.f = g.alignY(mod(anchor + g.t * 7, this.base.height / k));
+      m.f = g.alignY(mod(anchor + this.flow * 7, this.base.height / k));
       this.basePattern.setTransform(m);
       ctx.fillStyle = this.basePattern;
       ctx.fillRect(-30, -30, WORLD_W + 60, g.viewH + 60);
@@ -221,7 +257,7 @@ export class Water {
     }
     if (this.c2 && this.c2Pattern) {
       m.e = g.alignX(70 + Math.cos(g.t * 0.27) * 9);
-      m.f = g.alignY(mod(anchor - g.t * 5, this.c2.height / k));
+      m.f = g.alignY(mod(anchor - this.flow * 5, this.c2.height / k));
       this.c2Pattern.setTransform(m);
       ctx.fillStyle = this.c2Pattern;
       ctx.globalAlpha = 0.045;
@@ -230,10 +266,14 @@ export class Water {
     }
   }
 
-  /** Flow streaks: each lives in its slot and slides downstream while fading in and out, so none ever pops. */
-  private drawStreaks(g: Gfx, seed: number): void {
+  /**
+   * Flow streaks: each lives in its slot and slides downstream while fading in
+   * and out, so none ever pops. In the Rapids there are more of them, longer,
+   * brighter and sliding much faster; in the Marsh fewer and lazier.
+   */
+  private drawStreaks(g: Gfx, seed: number, look: ZoneLook): void {
     const { ctx } = g;
-    const [k0, k1] = range(g, STREAK_SLOT, 60);
+    const [k0, k1] = range(g, STREAK_SLOT, 70);
     ctx.lineCap = 'round';
     ctx.strokeStyle = P.foam;
     for (let bucket = 0; bucket < 3; bucket++) {
@@ -241,20 +281,23 @@ export class Water {
       ctx.globalAlpha = 0.07 + bucket * 0.07;
       ctx.beginPath();
       for (let k = k0; k <= k1; k++) {
-        for (let j = 0; j < 2; j++) {
+        const wr = look.weightAt('rapids', k * STREAK_SLOT + STREAK_SLOT / 2);
+        const wm = look.weightAt('marsh', k * STREAK_SLOT + STREAK_SLOT / 2);
+        for (let j = 0; j < 3; j++) {
           const h = hash(seed ^ 0x5e5e, k, j);
-          if (h > 0.72) continue;
-          const u = frac(g.t * (0.28 + h * 0.3) + hash(seed ^ 0x5e5f, k, j));
-          const a = Math.sin(u * Math.PI) * (0.4 + hash(seed ^ 0x5e60, k, j) * 0.6);
+          // The third streak per slot exists only in white water.
+          if (j === 2 ? h > wr * 0.8 : h > 0.72 + 0.26 * wr - 0.22 * wm) continue;
+          const u = frac(g.t * (0.28 + h * 0.3) * (1 + 1.9 * wr - 0.4 * wm) + hash(seed ^ 0x5e5f, k, j));
+          const a = Math.sin(u * Math.PI) * (0.4 + hash(seed ^ 0x5e60, k, j) * 0.6) * (1 + 0.9 * wr);
           const b = a > 0.66 ? 2 : a > 0.33 ? 1 : 0;
           if (b !== bucket || a < 0.08) continue;
-          const d = k * STREAK_SLOT + hash(seed ^ 0x5e61, k, j) * STREAK_SLOT - u * 36;
+          const d = k * STREAK_SLOT + hash(seed ^ 0x5e61, k, j) * STREAK_SLOT - u * (36 + 100 * wr);
           const y = g.yOfD(d);
-          if (y < -40 || y > g.viewH + 40) continue;
+          if (y < -70 || y > g.viewH + 70) continue;
           const l = g.leftAt(y);
           const r = g.rightAt(y);
           const x = l + 10 + (r - l - 20) * hash(seed ^ 0x5e62, k, j);
-          const len = 14 + 28 * hash(seed ^ 0x5e63, k, j);
+          const len = (14 + 28 * hash(seed ^ 0x5e63, k, j)) * (1 + 0.35 * wr);
           const sway = (hash(seed ^ 0x5e64, k, j) - 0.5) * 6;
           ctx.moveTo(x, y - len / 2);
           ctx.quadraticCurveTo(x + sway, y, x + sway * 0.3, y + len / 2);
@@ -265,12 +308,12 @@ export class Water {
     ctx.globalAlpha = 1;
   }
 
-  private drawDecor(g: Gfx, seed: number): void {
+  private drawDecor(g: Gfx, seed: number, look: ZoneLook): void {
     const f = this.f;
     if (!f) return;
     const { ctx } = g;
 
-    // Foam flecks: one path, one fill.
+    // Foam flecks: one path, one fill. Plentiful in the Rapids.
     {
       const [k0, k1] = range(g, FLECK_SLOT, 20);
       ctx.fillStyle = P.foam;
@@ -278,7 +321,8 @@ export class Water {
       ctx.beginPath();
       for (let k = k0; k <= k1; k++) {
         const h = hash(seed ^ 0xf1ec, k);
-        if (h > 0.55) continue;
+        const wr = look.weightAt('rapids', k * FLECK_SLOT);
+        if (h > 0.55 + 0.4 * wr) continue;
         const y = g.yOfD(k * FLECK_SLOT + h * FLECK_SLOT);
         const l = g.leftAt(y);
         const r = g.rightAt(y);
@@ -296,13 +340,15 @@ export class Water {
       ctx.globalAlpha = 1;
     }
 
-    // Lily pads hug the banks, out of the main lane.
+    // Lily pads hug the banks, out of the main lane (rare in white water).
     {
       const [k0, k1] = range(g, LILY_SLOT, 40);
       for (let k = k0; k <= k1; k++) {
+        const wr = look.weightAt('rapids', k * LILY_SLOT);
+        const keep = 0.4 * (1 - 0.9 * wr);
         for (let side = -1; side <= 1; side += 2) {
           const h = hash(seed ^ 0x1111, k, side);
-          if (h > 0.4) continue;
+          if (h > keep) continue;
           const y = g.yOfD(k * LILY_SLOT + hash(seed ^ 0x1112, k, side) * LILY_SLOT);
           if (y < -30 || y > g.viewH + 30) continue;
           const edge = side < 0 ? g.leftAt(y) : g.rightAt(y);
@@ -320,7 +366,8 @@ export class Water {
       const [k0, k1] = range(g, PETAL_SLOT, 20);
       for (let k = k0; k <= k1; k++) {
         const h = hash(seed ^ 0x2222, k);
-        if (h > 0.5) continue;
+        const wr = look.weightAt('rapids', k * PETAL_SLOT);
+        if (h > 0.5 * (1 - 0.8 * wr)) continue;
         const y = g.yOfD(k * PETAL_SLOT + h * PETAL_SLOT);
         if (y < -10 || y > g.viewH + 10) continue;
         const l = g.leftAt(y);
@@ -331,6 +378,236 @@ export class Water {
         g.sprite(s, x, y, v * TAU + g.t * (v - 0.5) * 1.2, 1);
       }
     }
+  }
+
+  /**
+   * Lily Marsh water: a skin of duckweed, a crowd of small lily pads and lotus
+   * blooms along the banks and a few out in the open. All smaller than the
+   * big bumper pads (which have a notch and a pale rim), and never dark discs.
+   */
+  private drawMarsh(g: Gfx, seed: number, look: ZoneLook): void {
+    const f = this.f;
+    if (!f) return;
+    const { ctx } = g;
+    g.world();
+
+    // Duckweed: tiny pale-green specks in loose clusters.
+    {
+      const [k0, k1] = range(g, DUCK_SLOT, 16);
+      ctx.fillStyle = ZP.duckweed;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      for (let k = k0; k <= k1; k++) {
+        const h = hash(seed ^ 0xd0c1, k);
+        if (h > 0.7 * look.weightAt('marsh', k * DUCK_SLOT)) continue;
+        const y = g.yOfD(k * DUCK_SLOT + h * DUCK_SLOT);
+        const l = g.leftAt(y);
+        const r = g.rightAt(y);
+        // Clusters gather towards the banks.
+        const e = hash(seed ^ 0xd0c2, k);
+        const side = e < 0.5 ? 0 : 1;
+        const near = (e * 2 - side) ** 1.6 * 0.5;
+        const x = side ? r - 4 - near * (r - l) : l + 4 + near * (r - l);
+        const n = 3 + Math.floor(hash(seed ^ 0xd0c3, k) * 4);
+        for (let i = 0; i < n; i++) {
+          const rr = 0.7 + hash(seed ^ 0xd0c4, k, i) * 1.1;
+          const ox = (hash(seed ^ 0xd0c5, k, i) - 0.5) * 12;
+          const oy = (hash(seed ^ 0xd0c6, k, i) - 0.5) * 9;
+          ctx.moveTo(x + ox + rr, y + oy);
+          ctx.arc(x + ox, y + oy, rr, 0, TAU);
+        }
+      }
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Lily pads and lotus blooms: dense near the banks, rare in the lane.
+    {
+      const [k0, k1] = range(g, MARSH_LILY_SLOT, 36);
+      for (let k = k0; k <= k1; k++) {
+        const wm = look.weightAt('marsh', k * MARSH_LILY_SLOT);
+        if (wm <= 0) continue;
+        for (let side = -1; side <= 1; side += 2) {
+          const h = hash(seed ^ 0x3a31, k, side);
+          if (h > 0.9 * wm) continue;
+          const y = g.yOfD(k * MARSH_LILY_SLOT + hash(seed ^ 0x3a32, k, side) * MARSH_LILY_SLOT);
+          if (y < -30 || y > g.viewH + 30) continue;
+          const edge = side < 0 ? g.leftAt(y) : g.rightAt(y);
+          const v = hash(seed ^ 0x3a33, k, side);
+          const off = 6 + v * v * 74;
+          const pick = hash(seed ^ 0x3a34, k, side);
+          // Plain pads most often, blooms and clusters for colour.
+          const s = pick < 0.4 ? f.lily[0] : pick < 0.62 ? f.lily[3] : pick < 0.82 ? f.lily[1] : f.lily[2];
+          const spin = (v - 0.5) * 0.12;
+          g.sprite(s, edge - side * off, y, v * TAU + g.t * spin, 0.72 + h * 0.5);
+        }
+      }
+      // A few small ones in the open water, smaller than a bumper pad.
+      const [m0, m1] = range(g, MARSH_FAR_LILY_SLOT, 30);
+      for (let k = m0; k <= m1; k++) {
+        const wm = look.weightAt('marsh', k * MARSH_FAR_LILY_SLOT);
+        const h = hash(seed ^ 0x3a41, k);
+        if (h > 0.55 * wm) continue;
+        const y = g.yOfD(k * MARSH_FAR_LILY_SLOT + hash(seed ^ 0x3a42, k) * MARSH_FAR_LILY_SLOT);
+        if (y < -30 || y > g.viewH + 30) continue;
+        const l = g.leftAt(y);
+        const r = g.rightAt(y);
+        const v = hash(seed ^ 0x3a43, k);
+        const s = f.lily[hash(seed ^ 0x3a44, k) < 0.35 ? 1 : 0];
+        g.sprite(s, l + 30 + (r - l - 60) * v, y, v * TAU + g.t * (v - 0.5) * 0.1, 0.62 + h * 0.3);
+      }
+    }
+  }
+
+  /**
+   * Rapids water: patches of white water (clusters of curled foam dashes with
+   * froth bubbles) that rush down the screen, and bold standing-wave crests.
+   * Density follows the Rapids weight at each slot, so the white water builds up
+   * as the zone approaches and thins out as it ends.
+   */
+  private drawWhitewater(g: Gfx, seed: number, look: ZoneLook): void {
+    const { ctx } = g;
+    g.world();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = ZP.spray;
+    ctx.fillStyle = ZP.spray;
+    // Patches: three alpha buckets, one path each. A patch is 3-5 dashes close together.
+    const [k0, k1] = range(g, CHOP_SLOT, 80);
+    for (let bucket = 0; bucket < 3; bucket++) {
+      ctx.lineWidth = 2.8 + bucket * 0.8;
+      ctx.globalAlpha = 0.2 + bucket * 0.15;
+      ctx.beginPath();
+      for (let k = k0; k <= k1; k++) {
+        const wr = look.weightAt('rapids', k * CHOP_SLOT);
+        if (wr <= 0) continue;
+        const h = hash(seed ^ 0xc40b, k);
+        if (h > wr * 0.7) continue;
+        const u = frac(g.t * (0.7 + hash(seed ^ 0xc40c, k) * 0.7) + hash(seed ^ 0xc40d, k));
+        const a = Math.sin(u * Math.PI);
+        const b = a > 0.7 ? 2 : a > 0.35 ? 1 : 0;
+        if (b !== bucket || a < 0.1) continue;
+        const cy = g.yOfD(k * CHOP_SLOT + hash(seed ^ 0xc40e, k) * CHOP_SLOT - u * 130);
+        if (cy < -50 || cy > g.viewH + 50) continue;
+        const l = g.leftAt(cy);
+        const r = g.rightAt(cy);
+        // Everywhere on the river, but rougher towards the banks.
+        const e = hash(seed ^ 0xc40f, k);
+        const q = hash(seed ^ 0xc412, k);
+        const cx = e < 0.4 ? l + 10 + q * (r - l - 20) : e < 0.7 ? l + 8 + q * q * (r - l) * 0.4 : r - 8 - q * q * (r - l) * 0.4;
+        // A patch is a few near-parallel streaks that all lean the same way, like
+        // foam stretched out by the current (random scribbles read as letters).
+        const n = 3 + Math.floor(hash(seed ^ 0xc413, k) * 3);
+        const curl = (hash(seed ^ 0xc411, k) - 0.5) * 7;
+        for (let i = 0; i < n; i++) {
+          const ox = (i - (n - 1) / 2) * (3.4 + hash(seed ^ 0xc414, k, i) * 2.2);
+          const oy = (hash(seed ^ 0xc415, k, i) - 0.5) * 20;
+          const len = 8 + hash(seed ^ 0xc410, k, i) * 17;
+          const x = cx + ox;
+          const y = cy + oy;
+          ctx.moveTo(x, y - len / 2);
+          ctx.quadraticCurveTo(x + curl, y, x + curl * 0.35, y + len / 2);
+        }
+      }
+      ctx.stroke();
+    }
+
+    // Froth: bubbles scattered around the patches, one fill.
+    ctx.globalAlpha = 0.42;
+    ctx.beginPath();
+    for (let k = k0; k <= k1; k++) {
+      const wr = look.weightAt('rapids', k * CHOP_SLOT);
+      if (wr <= 0) continue;
+      const h = hash(seed ^ 0xc420, k);
+      if (h > wr * 0.8) continue;
+      const y = g.yOfD(k * CHOP_SLOT + hash(seed ^ 0xc421, k) * CHOP_SLOT - frac(g.t * 0.35 + h) * 40);
+      if (y < -20 || y > g.viewH + 20) continue;
+      const l = g.leftAt(y);
+      const r = g.rightAt(y);
+      const near = hash(seed ^ 0xc422, k);
+      const x = near < 0.5 ? l + 6 + hash(seed ^ 0xc423, k) ** 2 * (r - l) * 0.5 : r - 6 - hash(seed ^ 0xc423, k) ** 2 * (r - l) * 0.5;
+      for (let i = 0; i < 4; i++) {
+        const rr = 0.9 + hash(seed ^ 0xc424, k, i) * 1.8;
+        const px = x + (hash(seed ^ 0xc425, k, i) - 0.5) * 14;
+        const py = y + (hash(seed ^ 0xc426, k, i) - 0.5) * 12;
+        ctx.moveTo(px + rr, py);
+        ctx.arc(px, py, rr, 0, TAU);
+      }
+    }
+    ctx.fill();
+
+    // Standing waves: bold crescents across the stream that rush by.
+    const [c0, c1] = range(g, CREST_SLOT, 50);
+    for (let bucket = 0; bucket < 2; bucket++) {
+      ctx.lineWidth = 2.4 + bucket * 1;
+      ctx.globalAlpha = 0.24 + bucket * 0.18;
+      ctx.beginPath();
+      for (let k = c0; k <= c1; k++) {
+        const wr = look.weightAt('rapids', k * CREST_SLOT);
+        if (wr <= 0) continue;
+        for (let j = 0; j < 2; j++) {
+          const h = hash(seed ^ 0xc5e1, k, j);
+          if (h > wr * 0.9) continue;
+          const u = frac(g.t * (0.3 + hash(seed ^ 0xc5e2, k, j) * 0.25) + hash(seed ^ 0xc5e3, k, j));
+          const a = Math.sin(u * Math.PI);
+          if ((a > 0.6 ? 1 : 0) !== bucket || a < 0.12) continue;
+          const y = g.yOfD(k * CREST_SLOT + hash(seed ^ 0xc5e4, k, j) * CREST_SLOT - u * 150);
+          if (y < -30 || y > g.viewH + 30) continue;
+          const l = g.leftAt(y);
+          const r = g.rightAt(y);
+          const w = 20 + hash(seed ^ 0xc5e5, k, j) * 28;
+          const x = l + 16 + w / 2 + (r - l - 32 - w) * hash(seed ^ 0xc5e6, k, j);
+          ctx.moveTo(x - w / 2, y + 4);
+          ctx.quadraticCurveTo(x, y - 8, x + w / 2, y + 4);
+        }
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Moon glints at Night: tiny horizontal sparkles that pulse in and out on the
+   * dark water, gathered loosely along a moon path that wanders down the
+   * river. They are lit by the pool of light like everything else; beyond it
+   * only their faint remains show, which is exactly the point of the dark.
+   * Reduced motion holds them at a steady glimmer instead of pulsing.
+   */
+  private drawGlints(g: Gfx, seed: number, look: ZoneLook): void {
+    const { ctx } = g;
+    g.world();
+    const [k0, k1] = range(g, GLINT_SLOT, 30);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = ZP.moonGlint;
+    for (let bucket = 0; bucket < 2; bucket++) {
+      ctx.lineWidth = bucket ? 1.7 : 1.1;
+      ctx.globalAlpha = bucket ? 0.9 : 0.4;
+      ctx.beginPath();
+      for (let k = k0; k <= k1; k++) {
+        const wn = look.weightAt('night', k * GLINT_SLOT);
+        if (wn <= 0) continue;
+        for (let j = 0; j < 2; j++) {
+          const h = hash(seed ^ 0x61a7, k, j);
+          if (h > 0.8 * wn) continue;
+          const ph = hash(seed ^ 0x61a8, k, j);
+          const tw = g.reduced ? 0.45 : Math.max(0, Math.sin(g.t * (0.6 + ph * 1.3) + ph * TAU)) ** 3;
+          if (tw < 0.06 || (tw > 0.55 ? 1 : 0) !== bucket) continue;
+          const d = k * GLINT_SLOT + hash(seed ^ 0x61a9, k, j) * GLINT_SLOT;
+          const y = g.yOfD(d);
+          if (y < -10 || y > g.viewH + 10) continue;
+          const l = g.leftAt(y);
+          const r = g.rightAt(y);
+          const along = hash(seed ^ 0x61aa, k, j);
+          // 55% gather on the moon path, the rest anywhere.
+          const path = (l + r) / 2 + Math.sin(d * 0.004 + 1.7) * (r - l) * 0.22;
+          const x = along < 0.55 ? path + (hash(seed ^ 0x61ab, k, j) - 0.5) * 70 : l + 8 + (r - l - 16) * hash(seed ^ 0x61ac, k, j);
+          const len = 2.5 + hash(seed ^ 0x61ad, k, j) * 5 * (bucket ? 1.3 : 1);
+          ctx.moveTo(x - len / 2, y);
+          ctx.lineTo(x + len / 2, y);
+        }
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** Foam lapping the waterline: a solid lip plus a broken, slower line. */
@@ -373,6 +650,21 @@ export class Water {
     ctx.stroke();
     ctx.setLineDash(NO_DASH);
     ctx.globalAlpha = 1;
+
+    if (this.rapids.any) {
+      // White water piles up against the banks: a thick, ragged foam band.
+      ctx.strokeStyle = ZP.spray;
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = 5.5;
+      strokeWeighted(g, this.rapids, 5.2, -5.2, 0.3);
+      // A line of foam bubbles: round dots along the band, drifting downstream.
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3.2;
+      ctx.setLineDash(BUBBLE_DASH);
+      ctx.lineDashOffset = ((k0 * RIVER_STEP) % 7.1) + t * 14;
+      strokeWeighted(g, this.rapids, 10, -10, 0.55);
+      ctx.setLineDash(NO_DASH);
+    }
   }
 }
 

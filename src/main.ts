@@ -15,7 +15,7 @@ import { createViewport } from './engine/viewport';
 import { createWorld, setDropHold, setViewHeight, stepWorld, summarize } from './game/world';
 import { Renderer } from './render/renderer';
 import * as storage from './storage';
-import type { DailyInfo, GameEvent, InputFrame, Mode, Settings, TitleInfo, TutorialHint, World } from './types';
+import type { DailyInfo, GameEvent, InputFrame, Mode, Settings, TitleInfo, TutorialHint, World, ZoneId } from './types';
 import { RESTART_CONFIRM_AFTER } from './ui/screens/pause';
 import { UI } from './ui/ui';
 
@@ -24,6 +24,8 @@ type Scene = 'menu' | 'run' | 'paused' | 'over';
 /** Resume countdown: 3 ticks of this many seconds. */
 const COUNTDOWN_TICK = 0.5;
 const IDLE_INPUT: InputFrame = { steerDelta: 0, axis: 0, absoluteX: null };
+/** Voicing of the new-zone stinger per zone (audio/synth.ts STINGERS). */
+const ZONE_STINGER: Readonly<Record<ZoneId, number>> = { jungle: 0, marsh: 1, rapids: 2, night: 3 };
 /** First-run tutorial: leaf travel (units) that counts as "has steered"... */
 const TUTORIAL_STEER_MOVE = 80;
 /** ...or this long (s) with the steering hint up, whichever comes first (before the first rock arrives). */
@@ -336,6 +338,34 @@ function dispatch(e: GameEvent): void {
     case 'game-over':
       finishRun();
       break;
+    case 'zone':
+      audio.play('zone', { variant: ZONE_STINGER[e.zone] });
+      break;
+    case 'pickup':
+      // Crumb plucks climb in pitch along a trail (streak); power-ups whoosh.
+      if (e.kind === 'crumb') audio.play('crumb', { combo: e.streak, pan: panOf(e.x) });
+      else audio.play('power', { pan: panOf(e.x) });
+      vibrate(e.kind === 'crumb' ? 4 : 14);
+      break;
+    case 'trail-complete':
+      audio.play('trail', { pan: panOf(e.x) });
+      vibrate([10, 20, 10]);
+      break;
+    case 'power-end':
+      audio.play('power-end');
+      break;
+    case 'shield-block':
+      audio.play('shield', { pan: panOf(e.x) });
+      vibrate(30);
+      break;
+    case 'heal':
+      audio.play('heart-up');
+      break;
+    case 'pad-bump':
+      audio.play('pad', { pan: panOf(e.x), volume: 0.7 });
+      vibrate(8);
+      break;
+    case 'power-start':
     case 'start':
       break;
   }
@@ -471,6 +501,8 @@ startLoop({
     renderer.render(world, frameDt, veil);
     if (scene === 'run' || scene === 'paused') ui.updateHUD(world, fps);
     audio.setIntensity(world.state === 'attract' ? 0.15 : world.intensity);
+    // Night closes the music in a little; the title screen's attract river stays bright.
+    audio.setDarkness(world.state === 'attract' ? 0 : world.darkness);
   },
 });
 

@@ -3,6 +3,7 @@
 // minutes, then keeps creeping up so even expert runs eventually end.
 
 import type { StormPhase } from '../types';
+import { createZoneMods, zoneModsAt } from './zones';
 
 export interface Difficulty {
   /** 0..1 across the first RAMP_TIME seconds, then slow growth up to LEVEL_MAX. */
@@ -159,4 +160,65 @@ export function timeAtDistance(distance: number): number {
   }
   const f = (distance - distTable[lo]) / (distTable[hi] - distTable[lo]);
   return (lo + f) * TABLE_DT;
+}
+
+// --- Distance <-> time with river zones ---------------------------------------
+// Rapids run 30 % faster and Lily Marsh 10 % slower than the time curve says,
+// so after the first zone change the table above drifts from the clock a
+// living run actually keeps. Obstacle density should follow the clock, so
+// this variant integrates the real speed, scrollAtLevel(level(t)) times the
+// zone's scroll at that distance, one metre at a time. Like the zones it is a
+// pure function of the seed, so it can be cached by seed.
+
+const PACE_STEP = 50;
+/** Beyond this the table is extrapolated at the final speed (about 25 min at full speed). */
+const PACE_MAX_D = 400_000;
+const PACE_N = PACE_MAX_D / PACE_STEP + 1;
+const MAX_PACE_TABLES = 8;
+
+interface PaceTable {
+  /** Run time at distance i * PACE_STEP, filled in as far as `n`. */
+  t: Float64Array;
+  n: number;
+}
+
+const paceTables = new Map<number, PaceTable>();
+const paceMods = createZoneMods();
+
+function paceTable(seed: number): PaceTable {
+  let tb = paceTables.get(seed);
+  if (!tb) {
+    // Preallocated, so a run never grows an array mid-game.
+    tb = { t: new Float64Array(PACE_N), n: 1 };
+    paceTables.set(seed, tb);
+    if (paceTables.size > MAX_PACE_TABLES) paceTables.delete(paceTables.keys().next().value as number);
+  }
+  return tb;
+}
+
+/**
+ * Run time at which a living run on river `seed` has travelled `distance`
+ * units, zone speeds included. Matches what stepWorld does to within a few
+ * hundredths of a second (the sim's own speed is evaluated per step).
+ */
+export function timeAtDistanceOnRiver(seed: number, distance: number): number {
+  if (distance <= 0) return 0;
+  const tb = paceTable(seed);
+  const t = tb.t;
+  const d = Math.min(distance, PACE_MAX_D);
+  const need = Math.ceil(d / PACE_STEP) + 1;
+  while (tb.n < need) {
+    const i = tb.n - 1;
+    const d0 = i * PACE_STEP;
+    const t0 = t[i];
+    // Midpoint rule: speed at the start gives the time to the middle of the
+    // step, speed there gives the step's duration.
+    const v0 = scrollAtLevel(levelAt(t0)) * zoneModsAt(seed, d0, paceMods).scroll;
+    const vm = scrollAtLevel(levelAt(t0 + PACE_STEP / (2 * v0))) * zoneModsAt(seed, d0 + PACE_STEP / 2, paceMods).scroll;
+    t[tb.n++] = t0 + PACE_STEP / vm;
+  }
+  const f = d / PACE_STEP;
+  const i = Math.min(Math.floor(f), tb.n - 2);
+  const at = t[i] + (t[i + 1] - t[i]) * (f - i);
+  return distance > PACE_MAX_D ? at + (distance - PACE_MAX_D) / scrollAtLevel(LEVEL_MAX) : at;
 }

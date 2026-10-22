@@ -2,8 +2,8 @@
 // modals, banners, toasts, countdown and tutorial hints. main.ts drives it
 // through the methods below; it reports back only through UIHandlers.
 //
-// Layers inside #ui (bottom → top): HUD, banners, countdown, screen, dock
-// (toasts + tutorial), modals, a screen-reader live region. #ui itself never
+// Layers inside #ui (bottom → top): HUD, banners, pills, countdown, screen, dock
+// (toasts + tutorial + first-time pickup hint), modals, a screen-reader live region. #ui itself never
 // takes pointer events, so touch steering on the canvas works everywhere
 // except on real controls and menu panels.
 
@@ -26,13 +26,14 @@ import type {
 } from '../types';
 import { focusEl, focusables, h } from './dom';
 import type { UIEnv } from './env';
-import { Banners, Countdown, Toasts, Tutorial } from './feedback';
+import { Banners, Countdown, PickupHint, Pills, Toasts, Tutorial } from './feedback';
 import { fmtMeters } from './format';
 import { Hud } from './hud';
 import { Modals } from './modal';
 import { buildHelp } from './modals/help';
 import { buildLeaderboard } from './modals/leaderboard';
 import { buildSettings, type SettingsModal } from './modals/settings';
+import { ZONE_INFO } from './pickupinfo';
 import { GameOverScreen } from './screens/gameover';
 import { PauseScreen } from './screens/pause';
 import { TitleScreen } from './screens/title';
@@ -78,6 +79,8 @@ export class UI {
   private env: UIEnv;
   private hud: Hud;
   private banners = new Banners();
+  private pills = new Pills();
+  private pickupHint = new PickupHint();
   private toasts = new Toasts();
   private countdown: Countdown;
   private tutorial = new Tutorial();
@@ -132,10 +135,10 @@ export class UI {
     );
     this.screenLayer = h('div', { class: 'screens' });
     this.liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
-    const dock = h('div', { class: 'dock' }, this.toasts.el, this.tutorial.el);
+    const dock = h('div', { class: 'dock' }, this.toasts.el, this.pickupHint.el, this.tutorial.el);
 
     root.classList.add('ui-root');
-    root.replaceChildren(this.hud.el, this.banners.el, this.countdown.el, this.screenLayer, dock, this.modals.el, this.liveEl);
+    root.replaceChildren(this.hud.el, this.banners.el, this.pills.el, this.countdown.el, this.screenLayer, dock, this.modals.el, this.liveEl);
 
     this.lastDevice = this.device();
     root.dataset.device = this.lastDevice;
@@ -169,6 +172,7 @@ export class UI {
   updateHUD(world: World, fps: number): void {
     this.lastWorld = world;
     this.hud.update(world, fps, this.showFps);
+    this.pickupHint.scan(world);
   }
 
   showPause(): void {
@@ -206,6 +210,20 @@ export class UI {
     switch (e.type) {
       case 'start':
         this.banners.clear();
+        this.pills.clear();
+        this.pickupHint.hide();
+        break;
+      case 'zone': {
+        const z = ZONE_INFO[e.zone];
+        this.banners.show('zone', `Entering ${z.name}`, z.icon, 1200, z.sub, e.zone);
+        break;
+      }
+      case 'trail-complete':
+        // The canvas already floats the bonus at the leaf: the pill only confirms (and is what screen readers get).
+        this.pills.show('trail', 'Perfect trail!', 'sparkle');
+        break;
+      case 'shield-block':
+        this.pills.show('block', 'Blocked!', 'mushroom');
         break;
       case 'storm':
         this.stormBanner(e.phase);
@@ -335,6 +353,8 @@ export class UI {
     this.modals.closeAll();
     this.countdown.show(null);
     this.banners.clear();
+    this.pills.clear();
+    this.pickupHint.hide();
   }
 
   /** Only the top-most layer is interactive (and reachable with Tab). */

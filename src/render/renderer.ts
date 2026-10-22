@@ -1,9 +1,10 @@
 // Canvas 2D renderer. Composes the layers back to front:
 //   water → rain ripples → wake → banks/jungle → storm veil + vignette → fireflies →
-//   100 m markers → best flag → obstacles → leaf → ant → drop telegraphs →
-//   effects → rain → floating text → lightning/scrims → hit vignette.
+//   100 m markers → best flag → obstacles → pickups → leaf → ant → power auras →
+//   night darkness → pickup glow → drop telegraphs → effects → rain →
+//   floating text → lightning/scrims → hit vignette.
 // Drop telegraphs sit above the leaf and ant on purpose: a drop aimed at the ant
-// must never be hidden under the leaf it is about to hit.
+// must never be hidden under the leaf it is about to hit, nor by the night.
 
 import type { Viewport } from '../engine/viewport';
 import type { GameEvent, Settings, World } from '../types';
@@ -16,7 +17,10 @@ import { FlagArt } from './flag';
 import { buildFoliage, buildJungleTile } from './foliage';
 import { Gfx } from './gfx';
 import { LeafArt } from './leaf';
+import { NightArt } from './night';
 import { ObstacleArt } from './obstacles';
+import { PickupArt } from './pickups';
+import { PowerArt } from './powers';
 import { Water } from './water';
 import { Weather } from './weather';
 
@@ -32,6 +36,9 @@ export class Renderer {
   private weather = new Weather();
   private flag = new FlagArt();
   private attract = new AttractDemo();
+  private pickups = new PickupArt();
+  private powers = new PowerArt();
+  private night = new NightArt();
   private builtPpu = 0;
   private lastWorld: World | null = null;
   private lastTime = 0;
@@ -64,6 +71,9 @@ export class Renderer {
     this.leaf.build(ppu);
     this.weather.build(ppu);
     this.flag.build(ppu);
+    this.pickups.build(ppu);
+    this.powers.build(ppu);
+    this.night.build(ppu);
   }
 
   /** Spawn transient effects (splashes, floating text, shake…) for a game event. */
@@ -140,8 +150,12 @@ export class Renderer {
     this.flag.drawMarkers(g, world);
     this.flag.drawBest(g, world);
     this.obstacles.draw(g, world);
+    this.pickups.draw(g, world);
     const pose = this.leaf.draw(g, world);
     this.ant.draw(g, world, pose);
+    this.powers.draw(g, world, pose);
+    this.night.draw(g, world);
+    this.pickups.drawGlow(g, world);
     drawDrops(g, world, world.state === 'attract' ? this.attract.drops : world.drops);
 
     // Bubbles rise where the leaf went down.

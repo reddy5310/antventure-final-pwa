@@ -34,6 +34,8 @@ function run(score: number, extra: Partial<RunSummary> = {}): RunSummary {
     mode: 'endless',
     dailyId: null,
     seed: 1,
+    crumbs: 0,
+    zonesReached: 1,
     score,
     distanceM: Math.floor(score / 2),
     timeS: 30,
@@ -128,5 +130,59 @@ describe('storage', () => {
     s.recordRun(run(100));
     s.recordRun(run(200));
     expect(s.getBoard('endless', null).map((e) => e.score)).toEqual([200, 100]);
+  });
+});
+
+describe('crumbs', () => {
+  it('adds each run to the lifetime total and to the wallet, ignoring nonsense counts', async () => {
+    const tab = await openTab();
+    expect(tab.getStats().totalCrumbs).toBe(0);
+    expect(tab.getWallet()).toBe(0);
+    tab.recordRun(run(100, { crumbs: 12 }));
+    tab.recordRun(run(90, { crumbs: 7.9 }));
+    tab.recordRun(run(80, { crumbs: -5 }));
+    tab.recordRun(run(70, { crumbs: Number.NaN }));
+    expect(tab.getStats().totalCrumbs).toBe(19);
+    expect(tab.getWallet()).toBe(19);
+    expect(tab.getStats().runs).toBe(4);
+  });
+
+  it('survives a reload, and a save from before crumbs existed starts at zero', async () => {
+    const tab = await openTab();
+    tab.recordRun(run(50, { crumbs: 5 }));
+    const again = await openTab();
+    expect(again.getStats().totalCrumbs).toBe(5);
+    expect(again.getWallet()).toBe(5);
+
+    // A Phase 1 save: stats without totalCrumbs, no wallet.
+    mem.setItem(KEY, JSON.stringify({ stats: { runs: 3, totalDistanceM: 100, totalNearMisses: 4, bestCombo: 2 } }));
+    const old = await openTab();
+    expect(old.getStats()).toEqual({ runs: 3, totalDistanceM: 100, totalNearMisses: 4, bestCombo: 2, totalCrumbs: 0 });
+    expect(old.getWallet()).toBe(0);
+    old.recordRun(run(60, { crumbs: 2 }));
+    expect(old.getStats().runs).toBe(4);
+    expect(old.getWallet()).toBe(2);
+  });
+
+  it('degrades a damaged wallet or total to zero instead of breaking boot', async () => {
+    mem.setItem(KEY, JSON.stringify({ wallet: 'lots', stats: { totalCrumbs: -3 } }));
+    const tab = await openTab();
+    expect(tab.getWallet()).toBe(0);
+    expect(tab.getStats().totalCrumbs).toBe(0);
+    mem.setItem(KEY, JSON.stringify({ wallet: Infinity, stats: { totalCrumbs: 'x' } }));
+    const other = await openTab();
+    expect(other.getWallet()).toBe(0);
+    expect(other.getStats().totalCrumbs).toBe(0);
+  });
+
+  it('adds up across two tabs sharing one save', async () => {
+    const a = await openTab();
+    const b = await openTab();
+    a.recordRun(run(40, { crumbs: 4 }));
+    b.recordRun(run(30, { crumbs: 6 }));
+    expect(b.getStats().totalCrumbs).toBe(10);
+    expect(b.getWallet()).toBe(10);
+    a.recordRun(run(20, { crumbs: 1 }));
+    expect(a.getWallet()).toBe(11);
   });
 });

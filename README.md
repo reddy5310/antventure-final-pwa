@@ -9,7 +9,9 @@ A tiny ant, one leaf, and a jungle river in a thunderstorm. Raindrops show you
 where they'll land before they hit, so you read the storm, slip through the
 gaps, and dodge by a hair to build your combo. You get three hearts, every
 run is a fresh river, and there's one shared **Daily River** each day for
-everyone to compete on.
+everyone to compete on. Along the way the river changes character (lily
+marsh, rapids, a pitch-dark night river), crumb trails pull you towards risk
+and power-ups give you a few seconds of an edge.
 
 **[Play now →](https://reddy5310.github.io/antventure-final-pwa/)** It's free,
 runs in the browser, installs as an app and plays offline.
@@ -43,6 +45,22 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
 - **A storm that builds.** The storm moves from calm to drizzle, then
   downpour, then cloudburst. Rocks, drifting twigs, a narrowing river and
   faster rain ramp the difficulty over about three minutes.
+- **River zones.** After the first 120 m the river changes every 150 to 220
+  m, with a 12 m blend between zones. **Lily Marsh** is wide, slow and
+  crumb-rich, with soft lily pads in place of rocks. **Rapids** are fast and
+  narrow with more rocks, and everything you score there counts **x1.4**
+  (the HUD shows it while it lasts). The **Night
+  River** is dark except for a pool of light around the leaf, and every rain
+  telegraph glows so you can still read it. A zone banner and a short stinger
+  announce each one.
+- **Crumb trails.** Trails of sugar crumbs run along the river. They are
+  never required, but they bend around rocks and hug their edges, so
+  following one is a routing decision. Take every crumb in a trail for a
+  Perfect trail bonus.
+- **Power-ups.** Rare bubbles on the water: a **mushroom cap** blocks the
+  next hit, **honey** pulls crumbs to you, a **ladybug** restores a heart and
+  a **firefly** widens your near-miss zone (and the night light). Each one is
+  introduced by a one-line hint the first time you see it.
 - **Competitive loop.** Score is the one metric: the HUD counts down the
   points still needed to beat your best, and "NEW BEST" fires the moment you
   do. A flag on the river marks where your farthest run ended. You get local
@@ -54,8 +72,10 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
 - **Every input.** Play with touch (drag anywhere, so your thumb never covers
   the ant), mouse, keyboard or gamepad, with hotkeys for everything.
 - **Fair and smooth.** A 120 Hz fixed-step simulation keeps runs identical on
-  every device and frame rate. Hazards are fair by construction: there is
-  always an escape.
+  every device and frame rate. Hazards are fair by construction in every
+  zone, night included: there is always an escape, and a rain telegraph is
+  always visible. Zones, crumbs and power-ups come from the river's seed, so
+  the Daily River is the same river for everyone.
 - **All art in code.** A Canvas 2D world and SVG/CSS UI in one "cozy
   jungle storm" style. The game itself uses no image files.
 - **Accessible.** Supports reduced motion, and telegraphs read by brightness
@@ -96,12 +116,15 @@ Installed app: long-press the icon for a **Daily River** shortcut, which opens
 ## Scoring
 
 ```
-score = metres × multiplier  +  near-miss bonuses
+score = (metres  +  near-miss bonuses  +  crumbs)  ×  multiplier  ×  zone pay
 ```
 
 - **Distance:** 1 point per metre (50 world units = 1 m), times your current multiplier.
 - **Near-miss:** a splash that lands just outside the ant scores **+25 × multiplier** and adds 1 to the combo.
 - **Multiplier:** x1, plus 0.25 per combo step, capped at **x5**. The combo fades after 3.5 s without a near-miss, and any hit breaks it.
+- **Crumbs:** **+10 × multiplier** each, and each one adds 0.4 s to a running combo timer. Take every crumb of a trail for a **Perfect trail** bonus of **+50 × multiplier**. Crumbs add roughly 10 to 20 % to a strong run; near-miss chains remain the main lever.
+- **Power-ups:** the mushroom cap (10 s, blocks one hit: no heart lost, combo kept), honey (12 s magnet that reaches crumbs up to 160 units away), the ladybug (+1 heart, or **+100 × multiplier** at full hearts) and the firefly (12 s, near-miss zone ×1.5). Picking up one that is already running refreshes its timer.
+- **Zone pay:** every zone pays x1 except the **Rapids**, which pay **x1.4** on everything (distance, near-misses, crumbs and bonuses) because they cost the most hits per minute. It switches at the middle of the 12 m blend and shows as a chip on the HUD.
 - **Hearts:** you have 3. A splash, rock or twig costs one, then you get 1.6 s of invulnerability. Lose the last one and the run ends.
 - **Milestones:** a cue every 100 m, and a fanfare when your score passes your best.
 
@@ -131,7 +154,7 @@ The scripts in more detail:
 
 - `npm run preview` serves the last production build on http://localhost:4173.
 - `npm run test:e2e:ui` opens Playwright's UI mode.
-- In the browser console, `window.__ant` exposes `{ world, scene, settings, play(mode), pause(), resume(), menu(), storage }` for debugging. The e2e tests use it too.
+- In the browser console, `window.__ant` exposes `{ world, scene, settings, viewport, quality, ui, play(mode), pause(), resume(), menu(), storage }` for debugging. The e2e tests use it too. Zones are a pure function of seed and distance, so setting `__ant.world.distance` jumps the run to any zone.
 
 ## Project structure
 
@@ -142,8 +165,8 @@ The scripts in more detail:
 │   ├── types.ts, config.ts  # Shared contracts and cross-module constants
 │   ├── storage.ts           # Settings, names, local leaderboards, stats (safe localStorage)
 │   ├── engine/              # Fixed-timestep loop, viewport mapping, input, seeded RNG, haptics
-│   ├── game/                # Simulation: river, drops, obstacles, player, scoring, storm, fairness
-│   ├── render/              # Canvas 2D renderer: water, banks, foliage, leaf, ant, effects, weather
+│   ├── game/                # Simulation: river, zones, drops, obstacles, pickups, powers, player, scoring, storm, fairness
+│   ├── render/              # Canvas 2D renderer: water, banks, foliage, zone looks, night mask, pickups, leaf, ant, effects, weather
 │   ├── ui/                  # DOM/SVG UI: title, HUD, pause, game over, modals, share card
 │   └── audio/               # Web Audio mixer: music, rain ambience, synthesized SFX
 ├── public/
@@ -152,8 +175,8 @@ The scripts in more detail:
 │   └── og-image.png         # Social card (generated)
 ├── scripts/                 # make-icons.mjs (Playwright rasteriser), icon-art.mjs (vector art), png.mjs
 ├── tests/
-│   ├── unit/                # Vitest: simulation, fairness, difficulty, input
-│   └── e2e/                 # Playwright: boot, run loop, controls, offline
+│   ├── unit/                # Vitest: simulation, zones, pickups, powers, fairness, difficulty, input
+│   └── e2e/                 # Playwright: boot, run loop, controls, offline, zones and pickups
 └── .github/workflows/       # ci.yml (checks), static.yml (GitHub Pages deploy)
 ```
 
@@ -174,9 +197,11 @@ replaces the old cache-first worker, clears its cache and reloads into v2.
 
 ## Roadmap
 
-- **Phase 2:** collectibles, power-ups, river zones with their own
-  mechanics, and a night river.
-- **Phase 3:** missions, skins and achievements.
+- **Phase 2 (shipped):** crumb trails, power-ups, river zones with their own
+  mechanics, and a night river. Design and balance notes are in
+  [`docs/phase-2/PLAN.md`](docs/phase-2/PLAN.md).
+- **Phase 3:** spend your crumbs (the wallet is already saved), plus
+  missions, skins and achievements.
 
 Leaderboards are local for now. Global boards need a server that validates
 runs, so v1's open-write database setup was retired instead of carried over.

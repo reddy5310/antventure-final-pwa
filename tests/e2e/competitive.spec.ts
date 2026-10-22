@@ -11,7 +11,7 @@ test('NEW BEST is about score: passing the farthest flag alone is not a best', a
     const s = (window as unknown as AntWindow).__ant.storage;
     s.resetAll();
     s.setFlag('tutorialSeen');
-    const base = { mode: 'endless' as const, dailyId: null, seed: 1, timeS: 20, nearMisses: 0, maxCombo: 0, hitsTaken: 3, killedBy: 'drop' as const };
+    const base = { mode: 'endless' as const, dailyId: null, seed: 1, timeS: 20, nearMisses: 0, maxCombo: 0, hitsTaken: 3, killedBy: 'drop' as const, crumbs: 0, zonesReached: 1 };
     s.recordRun({ ...base, score: 12, distanceM: 10 });
     s.recordRun({ ...base, score: 8, distanceM: 300 });
   });

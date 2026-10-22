@@ -16,7 +16,7 @@ import { ANT_HIT_R } from '../config';
 import type { World } from '../types';
 import { applyHit } from './damage';
 import { PHASE_MODS } from './difficulty';
-import { batchIsEscapable, fairReach } from './fairness';
+import { batchIsEscapable, expectedTravel, fairReach } from './fairness';
 import { insideLeaf } from './collision';
 import { riverEdgesInto, type RiverEdges } from './river';
 import { registerNearMiss } from './scoring';
@@ -34,6 +34,8 @@ import {
   PATTERN_MAX_FALL,
   WET_PER_SPLASH,
 } from './tuning';
+import { nearBandScale } from './powers';
+import { currentZoneMods } from './zones';
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -58,7 +60,7 @@ const edges: RiverEdges = { left: 0, right: 0 };
  * is fixed in river distance.
  */
 function edgesAtLanding(world: World, fall: number, dy = 0): RiverEdges {
-  return riverEdgesInto(world.seed, world.distance + world.scrollSpeed * fall - dy, edges);
+  return riverEdgesInto(world.seed, world.distance + expectedTravel(world, fall) - dy, edges);
 }
 
 /** Keeps a landing point on the water. */
@@ -69,14 +71,14 @@ function onWater(world: World, x: number, dy: number, fall: number): number {
 
 function commitBatch(world: World, batch: DropBatch, fall: number, aimed: boolean): void {
   const p = world.player;
-  const v = world.scrollSpeed;
   for (let i = 0; i < batch.n; i++) {
     const f = fall + batch.delay[i];
     world.drops.push({
       id: world.nextId++,
       x: batch.x[i],
-      // Starts upstream so that, scrolling with the river, it lands on the row.
-      y: p.y + batch.dy[i] - v * f,
+      // Starts upstream so that, scrolling with the river (at the speed of
+      // every zone on the way, a blend included), it lands on the row.
+      y: p.y + batch.dy[i] - expectedTravel(world, f),
       age: 0,
       fall: f,
       r: batch.r[i],
@@ -354,11 +356,15 @@ export function spawnDrops(world: World, st: SimState, dt: number): void {
   if (st.holdDrops) return;
   const diff = st.diff;
   const mods = PHASE_MODS[world.storm];
+  // The zone's rain multiplier covers all of the rain: patterns are about 40 %
+  // of it, so they must follow it too or the Rapids' lighter rain is only
+  // half as light as the table says.
+  const zoneRain = currentZoneMods(world).rain;
 
   // Timers count in spawns, drained at the current rate, so a change of
   // storm phase or difficulty takes effect at once rather than after the
   // previously scheduled gap.
-  const rate = diff.dropRate * mods.rate * diff.grace;
+  const rate = diff.dropRate * mods.rate * diff.grace * zoneRain;
   st.dropTimer -= dt * rate;
   if (st.dropTimer <= 0) spawnSingle(world, st);
 
@@ -368,7 +374,7 @@ export function spawnDrops(world: World, st: SimState, dt: number): void {
     // a beat later rather than the moment the storm picks up.
     if (st.patternTimer < PATTERN_LEAD_IN) st.patternTimer = PATTERN_LEAD_IN;
   } else {
-    st.patternTimer -= dt / interval;
+    st.patternTimer -= (dt * zoneRain) / interval;
     if (st.patternTimer <= 0) spawnPattern(world, st);
   }
   retryPattern(world, st, dt);
@@ -401,7 +407,7 @@ export function updateDrops(world: World, st: SimState, dt: number, live: boolea
     if (dist2 < hitR * hitR) {
       if (p.invuln <= 0) applyHit(world, st, 'drop', p.x, p.y);
     } else {
-      const nearR = hitR + NEAR_BAND;
+      const nearR = hitR + NEAR_BAND * nearBandScale(world);
       if (dist2 < nearR * nearR && p.invuln <= 0) registerNearMiss(world, d.x, d.y);
       if (onLeaf) p.wet = Math.min(1, p.wet + WET_PER_SPLASH);
     }
