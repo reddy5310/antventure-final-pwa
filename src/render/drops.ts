@@ -97,9 +97,12 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
       ringPath(ctx, d, rr, g.t);
       ctx.stroke();
     }
-    ctx.globalAlpha = 0.55 * fade;
+    // By day the outline is firmer: on the pale Marsh water and among the
+    // Rapids' white foam arcs a thin grey ring is the faintest in the game.
+    const day = 1 - night;
+    ctx.globalAlpha = (0.55 + 0.2 * day) * fade;
     ctx.strokeStyle = P.ringDark;
-    ctx.lineWidth = w + 2.4;
+    ctx.lineWidth = w + 2.4 + 1.2 * day;
     ringPath(ctx, d, rr, g.t);
     ctx.stroke();
     ctx.globalAlpha = (0.55 + 0.45 * t) * fade;
