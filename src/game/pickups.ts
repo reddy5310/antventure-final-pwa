@@ -13,9 +13,11 @@
 // To keep pickups out of rocks, a pickup is laid out only once the obstacle
 // stream has passed it (SimState.nextObstacleD, minus the furthest an obstacle
 // reaches back), so every obstacle that could touch it already exists. That
-// makes the result the same whatever the screen height is. Obstacles are
-// remembered as they were born (a twig's later drift is not predictable from
-// here).
+// makes the result the same whatever the screen height is. Rocks and pads are
+// remembered where they were born (they never move); a twig drifts sideways
+// once it is in range, so it is remembered with its drift and a pickup keeps
+// clear of where the twig will be when the leaf gets there (twigX): its
+// start time, speed and banks are all fixed by the seed and the distance.
 //
 // Play: the leaf collects pickups it touches, crumbs score and feed the combo
 // timer, the honey magnet pulls crumbs in, power-ups hand over to powers.ts.
@@ -23,6 +25,7 @@
 import { LEAF_HIT_R, SPAWN_AHEAD, UNITS_PER_METER } from '../config';
 import { createRng, type Rng } from '../engine/rng';
 import type { Pickup, PickupKind, World } from '../types';
+import { timeAtDistanceOnRiver } from './difficulty';
 import { activatePower, hasPower, powerPoints } from './powers';
 import { payFactor } from './scoring';
 import { riverEdgesInto, type RiverEdges } from './river';
@@ -105,6 +108,13 @@ const MIN_PLACED = 3;
  * leaf: a twig's bounding circle (62 + 6) with room for a bigger pad.
  */
 const OBSTACLE_REACH = 80;
+/**
+ * Extra room (units) around a twig's bounding circle for the part of its drift
+ * the prediction cannot see: the leaf is on its way to a pickup for a third of
+ * a second or so (~15 units of drift at the fastest twig) and the step-by-step
+ * sim differs a little from the tabulated clock.
+ */
+const TWIG_SLACK = 16;
 /** River distance a full trail spans, and what a power-up's search rows span. */
 const TRAIL_SPAN = (TRAIL_MAX - 1) * CRUMB_SPACING;
 const POWER_SPAN = (POWER_ROWS - 1) * POWER_ROW_STEP;
@@ -124,6 +134,17 @@ const NIGHT_LOOKAHEAD_M = 100;
 
 // --- State --------------------------------------------------------------------
 
+/** How a twig moves once it is in range (the same rule as updateObstacles). */
+interface Drift {
+  /** Run time (s) at which it starts: when the leaf is SPAWN_AHEAD short of it. */
+  t0: number;
+  /** Sideways speed (u/s) at birth; it turns round at the banks. */
+  vx: number;
+  /** Its centre bounces between these (bank to bank, less its reach). */
+  lo: number;
+  hi: number;
+}
+
 /** A circle on the river plane: (river distance, x) with a radius. */
 interface Disc {
   d: number;
@@ -131,6 +152,8 @@ interface Disc {
   r: number;
   /** Rocks and pads: static, safe to hug. Twigs drift, so they are only avoided. */
   solid: boolean;
+  /** Set for twigs: `x` is then where it was born. */
+  drift: Drift | null;
 }
 
 /** Bookkeeping for the Perfect-trail bonus and the pitch streak. */
@@ -154,6 +177,7 @@ interface Item extends Pickup {
 }
 
 interface PickupState {
+  seed: number;
   rng: Rng;
   nextTrailD: number;
   nextPowerD: number;
@@ -187,6 +211,7 @@ function pickupState(world: World): PickupState {
     const uTrail = rng.next();
     const uPower = rng.next();
     st = {
+      seed: world.seed,
       rng,
       nextTrailD: lerp(FIRST_TRAIL_M[0], FIRST_TRAIL_M[1], uTrail) * U,
       nextPowerD: lerp(FIRST_POWER_M[0], FIRST_POWER_M[1], uPower) * U,
@@ -273,6 +298,8 @@ function releaseFromTrail(st: PickupState, id: number): void {
 
 // --- Layout -------------------------------------------------------------------
 
+const scanEdges: RiverEdges = { left: 0, right: 0 };
+
 /** Records obstacles the first time they are seen: still exactly as they were born. */
 function scanObstacles(world: World, st: PickupState): void {
   const p = world.player;
@@ -282,15 +309,43 @@ function scanObstacles(world: World, st: PickupState): void {
     const o = list[i];
     if (o.id <= st.lastObsId) continue;
     if (o.id > maxId) maxId = o.id;
-    st.obstacles.push({
-      d: world.distance + (p.y - o.y),
-      x: o.x,
-      // A twig turns as it drifts: its bounding circle covers every angle.
-      r: o.kind === 'twig' ? o.len + o.r : o.r,
-      solid: o.kind !== 'twig',
-    });
+    const d = world.distance + (p.y - o.y);
+    if (o.kind === 'twig') {
+      // A twig turns as it drifts: its bounding circle covers every angle, and
+      // the drift says where that circle will be when the leaf reaches its row.
+      const reach = o.len + o.r;
+      const e = riverEdgesInto(world.seed, d, scanEdges);
+      st.obstacles.push({
+        d,
+        x: o.x,
+        r: reach + TWIG_SLACK,
+        solid: false,
+        drift: { t0: timeAtDistanceOnRiver(world.seed, d - SPAWN_AHEAD), vx: o.vx, lo: e.left + reach, hi: e.right - reach },
+      });
+    } else {
+      st.obstacles.push({ d, x: o.x, r: o.r, solid: true, drift: null });
+    }
   }
   st.lastObsId = maxId;
+}
+
+/**
+ * Where the disc's centre is when the leaf reaches river distance `d`. Rocks
+ * and pads stay put. A twig sits still until the leaf is SPAWN_AHEAD short of
+ * it, then drifts at its own speed and turns round at the banks (a triangle
+ * wave between them); the run clock at each distance is the one obstacles
+ * already lay themselves out by, so this is a pure function of the seed.
+ */
+function discX(seed: number, s: Disc, d: number): number {
+  const k = s.drift;
+  if (!k) return s.x;
+  const span = k.hi - k.lo;
+  if (!(span > 0)) return s.x;
+  const t = timeAtDistanceOnRiver(seed, d) - k.t0;
+  if (t <= 0) return s.x;
+  const u = (s.x - k.lo + k.vx * t) / span;
+  const f = u - 2 * Math.floor(u / 2);
+  return k.lo + span * (f <= 1 ? f : 2 - f);
 }
 
 function forget(discs: Disc[], minD: number): void {
@@ -324,23 +379,25 @@ function separate(st: PickupState, n: number, discs: Disc[], pad: number, awayFr
     for (let i = 0; i < n; i++) {
       if (!st.ok[i]) continue;
       const need = chord(R, st.ds[i] - s.d);
-      if (need > EPS && Math.abs(st.xs[i] - s.x) < need - EPS) {
-        sum += st.xs[i] - s.x;
+      const cx = discX(st.seed, s, st.ds[i]);
+      if (need > EPS && Math.abs(st.xs[i] - cx) < need - EPS) {
+        sum += st.xs[i] - cx;
         hits++;
       }
     }
     if (hits === 0) continue;
     let side: 1 | -1;
-    if (awayFrom === awayFrom) side = s.x >= awayFrom ? 1 : -1; // the opening trail passes on the far side
+    if (awayFrom === awayFrom) side = discX(st.seed, s, first) >= awayFrom ? 1 : -1; // the opening trail passes on the far side
     else if (sum !== 0) side = sum > 0 ? 1 : -1;
-    else side = s.x < (st.lo[0] + st.hi[0]) / 2 ? 1 : -1; // dead centre: towards the roomier side
+    else side = discX(st.seed, s, first) < (st.lo[0] + st.hi[0]) / 2 ? 1 : -1; // dead centre: towards the roomier side
     for (let i = 0; i < n; i++) {
       if (!st.ok[i]) continue;
       const need = chord(R, st.ds[i] - s.d);
-      if (!(need > EPS && Math.abs(st.xs[i] - s.x) < need - EPS)) continue;
-      let nx = s.x + side * need;
+      const cx = discX(st.seed, s, st.ds[i]);
+      if (!(need > EPS && Math.abs(st.xs[i] - cx) < need - EPS)) continue;
+      let nx = cx + side * need;
       if (nx < st.lo[i] || nx > st.hi[i]) {
-        nx = s.x - side * need;
+        nx = cx - side * need;
         if (nx < st.lo[i] || nx > st.hi[i]) {
           st.ok[i] = 0;
           continue;
@@ -356,7 +413,7 @@ function overlaps(st: PickupState, i: number, discs: Disc[], pad: number): boole
   for (const s of discs) {
     const R = s.r + pad;
     const need = chord(R, st.ds[i] - s.d);
-    if (need > EPS && Math.abs(st.xs[i] - s.x) < need - 2 * EPS) return true;
+    if (need > EPS && Math.abs(st.xs[i] - discX(st.seed, s, st.ds[i])) < need - 2 * EPS) return true;
   }
   return false;
 }
@@ -439,69 +496,78 @@ function layoutTrail(world: World, st: PickupState, d0: number): void {
   const shape: Shape = trailId === 1 ? 'line' : pickShape(uShape);
 
   const e = st.edges;
-  for (let i = 0; i < n; i++) {
-    st.ds[i] = d0 + i * CRUMB_SPACING;
-    riverEdgesInto(seed, st.ds[i], e);
-    st.lo[i] = e.left + EDGE_MARGIN;
-    st.hi[i] = e.right - EDGE_MARGIN;
-    st.ok[i] = 1;
-  }
   const dMid = d0 + ((n - 1) * CRUMB_SPACING) / 2;
   riverEdgesInto(seed, dMid, e);
   const mid = (e.left + e.right) / 2;
   const cxLo = e.left + 40;
   const cxHi = e.right - 40;
-  const sgn = uSide < 0.5 ? -1 : 1;
-  let cx = trailId === 1 ? mid + sgn * lerp(55, 70, uCx) : lerp(cxLo, cxHi, uCx);
   const reach = ((n - 1) * CRUMB_SPACING) / 2 + 60;
-
-  const ref = shape === 'arc' || shape === 'dare' ? nearestDisc(st, dMid, reach, true) : null;
-  if (shape === 'zigzag') {
-    // Peak of the wave; the crumbs sample it at 0, 2/3, 2/3, 0, -2/3, -2/3 of the peak, so ~43-55 off centre.
-    const amp = lerp(65, 83, uAmp);
-    cx = clamp(cx, e.left + EDGE_MARGIN + amp, e.right - EDGE_MARGIN - amp);
-    for (let i = 0; i < n; i++) st.xs[i] = cx + sgn * amp * triangle(i / 6);
-  } else if (shape === 'arc' && ref) {
-    // Hugs the rock at the point where the leaf passes it, flares out either side.
-    const s = roomySide(seed, ref, uSide);
-    for (let i = 0; i < n; i++) {
-      const u = Math.min(1, Math.abs(st.ds[i] - ref.d) / 110);
-      st.xs[i] = ref.x + s * (ref.r + LEAF_HIT_R + 4 + 52 * u * u);
-    }
-  } else if (shape === 'arc') {
-    // No rock to bend around: a gentle bow across the lane.
-    for (let i = 0; i < n; i++) {
-      const t = i / (n - 1);
-      st.xs[i] = cx - sgn * 22 + sgn * 44 * 4 * t * (1 - t);
-    }
-  } else if (shape === 'dare' && ref) {
-    // Hugging the rock: the crumbs sit just outside its collision circle, on the passing side.
-    const s = roomySide(seed, ref, uSide);
-    for (let i = 0; i < n; i++) st.xs[i] = ref.x + s * (ref.r + LEAF_HIT_R + 8);
-  } else {
-    for (let i = 0; i < n; i++) st.xs[i] = cx;
-  }
-  for (let i = 0; i < n; i++) st.xs[i] = clamp(st.xs[i], st.lo[i], st.hi[i]);
+  const side = uSide < 0.5 ? -1 : 1;
 
   // The opening trail must not be carried across the start lane by a rock
   // (a leaf that never moves collects nothing): it passes rocks on the far side.
   let startX = NaN;
   if (trailId === 1) {
-    riverEdgesInto(seed, 0, e);
-    startX = (e.left + e.right) / 2;
+    const s0 = riverEdgesInto(seed, 0, scanEdges);
+    startX = (s0.left + s0.right) / 2;
   }
-  // Slide out of obstacles and earlier pickups; a few rounds settle chained pushes.
-  for (let pass = 0; pass < 3; pass++) {
-    separate(st, n, st.obstacles, CLEAR_OBSTACLE, startX);
-    separate(st, n, st.placed, CLEAR_PICKUP);
-  }
-  if (trailId === 1) {
-    for (let i = 0; i < n; i++) if (Math.abs(st.xs[i] - startX) < PICKUP_R + 6) st.ok[i] = 0;
-  }
+
+  // The opening trail is what teaches a new player what crumbs are, so if the
+  // rocks and twigs near the start leave it fewer than MIN_PLACED crumbs it gets
+  // one more try on the other side of the start lane. Every other trail just
+  // goes without.
   let count = 0;
-  for (let i = 0; i < n; i++) {
-    if (st.ok[i] && (overlaps(st, i, st.obstacles, CLEAR_OBSTACLE) || overlaps(st, i, st.placed, CLEAR_PICKUP))) st.ok[i] = 0;
-    count += st.ok[i];
+  for (let attempt = 0; attempt < (trailId === 1 ? 2 : 1) && count < MIN_PLACED; attempt++) {
+    const sgn = attempt === 0 ? side : -side;
+    for (let i = 0; i < n; i++) {
+      st.ds[i] = d0 + i * CRUMB_SPACING;
+      riverEdgesInto(seed, st.ds[i], scanEdges);
+      st.lo[i] = scanEdges.left + EDGE_MARGIN;
+      st.hi[i] = scanEdges.right - EDGE_MARGIN;
+      st.ok[i] = 1;
+    }
+    let cx = trailId === 1 ? mid + sgn * lerp(55, 70, uCx) : lerp(cxLo, cxHi, uCx);
+    const ref = shape === 'arc' || shape === 'dare' ? nearestDisc(st, dMid, reach, true) : null;
+    if (shape === 'zigzag') {
+      // Peak of the wave; the crumbs sample it at 0, 2/3, 2/3, 0, -2/3, -2/3 of the peak, so ~43-55 off centre.
+      const amp = lerp(65, 83, uAmp);
+      cx = clamp(cx, e.left + EDGE_MARGIN + amp, e.right - EDGE_MARGIN - amp);
+      for (let i = 0; i < n; i++) st.xs[i] = cx + sgn * amp * triangle(i / 6);
+    } else if (shape === 'arc' && ref) {
+      // Hugs the rock at the point where the leaf passes it, flares out either side.
+      const s = roomySide(seed, ref, uSide);
+      for (let i = 0; i < n; i++) {
+        const u = Math.min(1, Math.abs(st.ds[i] - ref.d) / 110);
+        st.xs[i] = ref.x + s * (ref.r + LEAF_HIT_R + 4 + 52 * u * u);
+      }
+    } else if (shape === 'arc') {
+      // No rock to bend around: a gentle bow across the lane.
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1);
+        st.xs[i] = cx - sgn * 22 + sgn * 44 * 4 * t * (1 - t);
+      }
+    } else if (shape === 'dare' && ref) {
+      // Hugging the rock: the crumbs sit just outside its collision circle, on the passing side.
+      const s = roomySide(seed, ref, uSide);
+      for (let i = 0; i < n; i++) st.xs[i] = ref.x + s * (ref.r + LEAF_HIT_R + 8);
+    } else {
+      for (let i = 0; i < n; i++) st.xs[i] = cx;
+    }
+    for (let i = 0; i < n; i++) st.xs[i] = clamp(st.xs[i], st.lo[i], st.hi[i]);
+
+    // Slide out of obstacles and earlier pickups; a few rounds settle chained pushes.
+    for (let pass = 0; pass < 3; pass++) {
+      separate(st, n, st.obstacles, CLEAR_OBSTACLE, startX);
+      separate(st, n, st.placed, CLEAR_PICKUP);
+    }
+    if (trailId === 1) {
+      for (let i = 0; i < n; i++) if (Math.abs(st.xs[i] - startX) < PICKUP_R + 6) st.ok[i] = 0;
+    }
+    count = 0;
+    for (let i = 0; i < n; i++) {
+      if (st.ok[i] && (overlaps(st, i, st.obstacles, CLEAR_OBSTACLE) || overlaps(st, i, st.placed, CLEAR_PICKUP))) st.ok[i] = 0;
+      count += st.ok[i];
+    }
   }
   if (count < MIN_PLACED) return;
 
@@ -510,7 +576,7 @@ function layoutTrail(world: World, st: PickupState, d0: number): void {
   for (let i = 0; i < n; i++) {
     if (!st.ok[i]) continue;
     pushItem(world, 'crumb', st.xs[i], st.ds[i], trailId, idx, hashUnit(trailId, i));
-    st.placed.push({ d: st.ds[i], x: st.xs[i], r: CRUMB_R, solid: false });
+    st.placed.push({ d: st.ds[i], x: st.xs[i], r: CRUMB_R, solid: false, drift: null });
     idx++;
   }
 }
@@ -536,7 +602,7 @@ function pickPowerKind(seed: number, d: number, u: number, sample: ZoneSample): 
 /** Is (x, dist) far enough from every obstacle and earlier pickup to hold a power-up? */
 function powerSpotFree(st: PickupState, x: number, dist: number): boolean {
   for (const s of st.obstacles) {
-    const dx = x - s.x;
+    const dx = x - discX(st.seed, s, dist);
     const dd = dist - s.d;
     const reachR = s.r + POWER_CLEAR;
     if (dx * dx + dd * dd < reachR * reachR) return false;
@@ -599,7 +665,7 @@ function layoutPower(world: World, st: PickupState, d0: number): void {
       const x = clamp(base + nudge, lo, hi);
       if (!powerSpotFree(st, x, dist)) continue;
       pushItem(world, kind, x, dist, 0, -1, uVar);
-      st.placed.push({ d: dist, x, r: POWER_R, solid: false });
+      st.placed.push({ d: dist, x, r: POWER_R, solid: false, drift: null });
       st.lastPowerD = d0;
       return;
     }

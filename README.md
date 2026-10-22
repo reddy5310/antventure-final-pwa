@@ -48,7 +48,8 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
 - **River zones.** After the first 120 m the river changes every 150 to 220
   m, with a 12 m blend between zones. **Lily Marsh** is wide, slow and
   crumb-rich, with soft lily pads in place of rocks. **Rapids** are fast and
-  narrow with more rocks, so metres (and points) come quicker. The **Night
+  narrow with more rocks, and everything you score there counts **x1.4**
+  (the HUD shows it while it lasts). The **Night
   River** is dark except for a pool of light around the leaf, and every rain
   telegraph glows so you can still read it. A zone banner and a short stinger
   announce each one.
@@ -115,14 +116,15 @@ Installed app: long-press the icon for a **Daily River** shortcut, which opens
 ## Scoring
 
 ```
-score = metres × multiplier  +  near-miss bonuses  +  crumbs
+score = (metres  +  near-miss bonuses  +  crumbs)  ×  multiplier  ×  zone pay
 ```
 
 - **Distance:** 1 point per metre (50 world units = 1 m), times your current multiplier.
 - **Near-miss:** a splash that lands just outside the ant scores **+25 × multiplier** and adds 1 to the combo.
 - **Multiplier:** x1, plus 0.25 per combo step, capped at **x5**. The combo fades after 3.5 s without a near-miss, and any hit breaks it.
 - **Crumbs:** **+10 × multiplier** each, and each one adds 0.4 s to a running combo timer. Take every crumb of a trail for a **Perfect trail** bonus of **+50 × multiplier**. Crumbs add roughly 10 to 20 % to a strong run; near-miss chains remain the main lever.
-- **Power-ups:** the mushroom cap (10 s, blocks one hit: no heart lost, combo kept), honey (9 s magnet), the ladybug (+1 heart, or **+100 × multiplier** at full hearts) and the firefly (12 s, near-miss zone ×1.5). Picking up one that is already running refreshes its timer.
+- **Power-ups:** the mushroom cap (10 s, blocks one hit: no heart lost, combo kept), honey (12 s magnet that reaches crumbs up to 160 units away), the ladybug (+1 heart, or **+100 × multiplier** at full hearts) and the firefly (12 s, near-miss zone ×1.5). Picking up one that is already running refreshes its timer.
+- **Zone pay:** every zone pays x1 except the **Rapids**, which pay **x1.4** on everything (distance, near-misses, crumbs and bonuses) because they cost the most hits per minute. It switches at the middle of the 12 m blend and shows as a chip on the HUD.
 - **Hearts:** you have 3. A splash, rock or twig costs one, then you get 1.6 s of invulnerability. Lose the last one and the run ends.
 - **Milestones:** a cue every 100 m, and a fanfare when your score passes your best.
 

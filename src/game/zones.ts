@@ -18,7 +18,7 @@ export interface ZoneDef {
   width: number;
   /** River speed multiplier. */
   scroll: number;
-  /** Raindrop spawn-rate multiplier. */
+  /** Rain multiplier: how fast single drops and drop patterns both spawn. */
   rain: number;
   /** Obstacle density multiplier (spacing divides by it). */
   rocks: number;

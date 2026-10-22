@@ -28,6 +28,12 @@ const FLIES = 4;
 const POP_TIME = 0.3;
 /** The firefly sprite is drawn this much larger than its art box: small enough to be a bug, big enough to read. */
 const FLY_SCALE = 1.5;
+/**
+ * With all three powers on, the honey cells and the fireflies sit at this share
+ * of their strength: the mushroom (the one that says "you are protected") stays
+ * the strongest, and the ant is not buried under three stacked auras.
+ */
+const CROWDED = 0.55;
 
 function capSprite(ppu: number): Sprite {
   return makeSprite(CAP_BOX, CAP_BOX, ppu, (c) => {
@@ -177,12 +183,13 @@ export class PowerArt {
     for (let i = 0; i < list.length; i++) this.on[kindIdx(list[i].kind)] = true;
 
     if (world.state === 'dying' || world.state === 'over' || pose.alpha < 0.05) return;
+    const calmer = list.length >= 3 ? CROWDED : 1;
     for (let i = 0; i < list.length; i++) {
       const pw = list[i];
       if (pw.left <= 0) continue;
       if (pw.kind === 'mushroom') this.mushroom(g, pw, pose);
-      else if (pw.kind === 'honey') this.honey(g, world, pw, pose);
-      else this.firefly(g, pw, pose);
+      else if (pw.kind === 'honey') this.honey(g, world, pw, pose, calmer);
+      else this.firefly(g, pw, pose, calmer);
     }
     g.ctx.globalAlpha = 1;
   }
@@ -214,13 +221,13 @@ export class PowerArt {
     }
   }
 
-  private honey(g: Gfx, world: World, pw: ActivePower, pose: LeafPose): void {
+  private honey(g: Gfx, world: World, pw: ActivePower, pose: LeafPose, strength: number): void {
     const { ctx, t } = g;
     const calm = g.reduced;
     const grow = this.grow(pw);
     // Running out: the whole aura flickers gently and shrinks a little.
     const fade = pw.left < WARN ? (calm ? 0.55 : 0.55 + 0.45 * Math.abs(Math.sin(t * 7))) : 1;
-    const base = fade * pose.alpha;
+    const base = fade * pose.alpha * strength;
     const glow = glowSprite('honey');
 
     // Pull lines first (under the ring): faint streaks and dots flowing from each nearby crumb to the leaf.
@@ -299,7 +306,7 @@ export class PowerArt {
     }
   }
 
-  private firefly(g: Gfx, pw: ActivePower, pose: LeafPose): void {
+  private firefly(g: Gfx, pw: ActivePower, pose: LeafPose, strength: number): void {
     const { ctx, t } = g;
     const calm = g.reduced;
     const grow = this.grow(pw);
@@ -308,16 +315,17 @@ export class PowerArt {
     const warm = this.warm;
     const fly = this.fly;
     if (!warm || !fly) return;
+    const alpha = pose.alpha * strength;
 
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = (0.3 + (calm ? 0 : Math.sin(t * 2.1) * 0.06)) * clamp01(show / 2) * pose.alpha * grow;
+    ctx.globalAlpha = (0.3 + (calm ? 0 : Math.sin(t * 2.1) * 0.06)) * clamp01(show / 2) * alpha * grow;
     g.sprite(warm, pose.x, pose.y, 0, 1.15);
     for (let i = 0; i < FLIES; i++) {
       const vis = clamp01(show - i);
       if (vis <= 0) continue;
       this.place(i, t, calm, grow, pose);
       const blink = calm ? 0.8 : 0.55 + 0.45 * Math.sin(t * (3.2 + i * 0.7) + i * 2.3);
-      ctx.globalAlpha = (0.5 + 0.5 * blink) * vis * pose.alpha;
+      ctx.globalAlpha = (0.5 + 0.5 * blink) * vis * alpha;
       g.sprite(warm, this.fx, this.fy, 0, 0.3 + 0.2 * blink);
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -328,7 +336,7 @@ export class PowerArt {
       // Face along the orbit; the wings flutter by squeezing the sprite sideways.
       g.local(this.fx, this.fy, this.fa, 1);
       ctx.scale((calm ? 1 : 0.7 + 0.3 * Math.abs(Math.sin(t * 38 + i))) * FLY_SCALE, FLY_SCALE);
-      ctx.globalAlpha = vis * pose.alpha;
+      ctx.globalAlpha = vis * alpha;
       ctx.drawImage(fly.img, -fly.w / 2, -fly.h / 2, fly.w, fly.h);
     }
   }
@@ -354,5 +362,3 @@ export class PowerArt {
     this.fa = Math.atan2(-Math.sin(a) * rx * dir, -Math.cos(a) * ry * dir);
   }
 }
-
-

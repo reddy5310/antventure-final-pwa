@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ANT_HIT_R, LEAF_HIT_R, MAX_HEARTS, SIM_DT, SPAWN_AHEAD, UNITS_PER_METER } from '../../src/config';
 import { createRng } from '../../src/engine/rng';
+import { closestOnObstacle } from '../../src/game/collision';
 import {
   CRUMB_COMBO_BONUS,
   CRUMB_POINTS,
@@ -313,18 +314,19 @@ describe('layout', () => {
     }
   });
 
-  it('keeps clear of real obstacles in a live run (rocks and pads for good, twigs as they were born)', () => {
+  it('keeps clear of real obstacles in a live run (rocks and pads where they sit, twigs where they will be)', () => {
     for (const seed of [3, 2026]) {
       const w = newRun(seed);
       w.player.hearts = 1e9;
-      const born = new Map<number, { x: number; d: number; reach: number; kind: string }>();
+      const born = new Map<number, { x: number; d: number; reach: number }>();
       const checked = new Set<number>();
       let powersChecked = 0;
       for (let i = 0; i < 140 / SIM_DT; i++) {
         stepWorld(w, scripted(i), SIM_DT);
         w.events.length = 0;
         for (const o of w.obstacles) {
-          if (!born.has(o.id)) born.set(o.id, { x: o.x, d: distOf(w, o.y), reach: o.kind === 'twig' ? o.len + o.r : o.r, kind: o.kind });
+          // Twigs drift: they are checked below, as they are when the leaf gets there.
+          if (o.kind !== 'twig' && !born.has(o.id)) born.set(o.id, { x: o.x, d: distOf(w, o.y), reach: o.r });
         }
         for (const k of w.pickups) {
           if (checked.has(k.id)) continue;
@@ -352,6 +354,49 @@ describe('layout', () => {
       expect(checked.size).toBeGreaterThan(40);
       expect(powersChecked).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('keeps crumbs and power-ups out from under the drifting twigs while the leaf is near them', () => {
+    // A twig is laid out at one spot and then drifts across the river for
+    // seconds before it reaches the leaf; a crumb placed against its birth spot
+    // ended up under it, a lure into a hit (about 1 crumb in 100). Measured
+    // against the real twig's capsule whenever the pickup is within a leaf's
+    // length of the leaf's row.
+    const c = { x: 0, y: 0 };
+    let crossings = 0;
+    let lured = 0;
+    for (let n = 1; n <= 24; n++) {
+      const seed = n * 7919;
+      const w = newRun(seed);
+      w.player.hearts = 1e9;
+      const firstX = new Map<number, number>();
+      const seen = new Set<number>();
+      const flagged = new Set<number>();
+      for (let i = 0; i < 150 / SIM_DT; i++) {
+        stepWorld(w, scripted(i), SIM_DT);
+        w.events.length = 0;
+        for (const k of w.pickups) {
+          if (!firstX.has(k.id)) firstX.set(k.id, k.x);
+          // The honey magnet pulls crumbs about: only pickups that stayed where they were laid out count.
+          if (Math.abs(k.x - (firstX.get(k.id) as number)) > 0.01 || Math.abs(k.y - w.player.y) > 70) continue;
+          if (!seen.has(k.id)) {
+            seen.add(k.id);
+            crossings++;
+          }
+          for (const o of w.obstacles) {
+            if (o.kind !== 'twig') continue;
+            closestOnObstacle(o, k.x, k.y, c);
+            const clear = Math.hypot(k.x - c.x, k.y - c.y) - o.r - (k.kind === 'crumb' ? 6 : 18);
+            if (clear < 0 && !flagged.has(k.id)) {
+              flagged.add(k.id);
+              lured++;
+            }
+          }
+        }
+      }
+    }
+    expect(crossings).toBeGreaterThan(1000);
+    expect(lured).toBe(0);
   });
 
   it('lays crumbs out 22 units apart in trails of 5-9, a few trails of fewer only where rocks crowd them', () => {
@@ -487,7 +532,9 @@ describe('layout', () => {
   });
 
   it('puts the first trail beside the start so a leaf that never moves collects nothing early', () => {
-    for (let seed = 1; seed <= 12; seed++) {
+    // Many seeds: a rock or a drifting twig near the start can crowd the opening trail out
+    // (seed 10 did), and it then gets a second try on the other side.
+    for (let seed = 1; seed <= 80; seed++) {
       const w = newRun(seed);
       // No hazards: nothing knocks the leaf off its spot.
       const watch = new Watch();
