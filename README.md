@@ -3,7 +3,7 @@
 [![CI](https://github.com/reddy5310/antventure-final-pwa/actions/workflows/ci.yml/badge.svg)](https://github.com/reddy5310/antventure-final-pwa/actions/workflows/ci.yml)
 [![Deploy](https://github.com/reddy5310/antventure-final-pwa/actions/workflows/static.yml/badge.svg)](https://github.com/reddy5310/antventure-final-pwa/actions/workflows/static.yml)
 
-![A cartoon ant riding a leaf down a stormy jungle river](public/og-image.png)
+![Antventure: the title screen and runs through the Lily Marsh, the Rapids and the Night River](docs/screenshots/banner.jpg)
 
 A tiny ant, one leaf, and a jungle river in a thunderstorm. Raindrops show you
 where they'll land before they hit, so you read the storm, slip through the
@@ -24,14 +24,18 @@ runs in the browser, installs as an app and plays offline.
 
 ## Screenshots
 
-| Title | Rapids (x1.4 pay) | Game over |
+| Title | Rapids (x1.4 pay) | Lily Marsh |
 | :---: | :---: | :---: |
-| ![Title screen](docs/screenshots/title.png) | ![A run in the Rapids, with crumb trails, rocks and a ladybug power-up](docs/screenshots/run.png) | ![Game over screen](docs/screenshots/game-over.png) |
+| ![Title screen with the Daily River and today's missions](docs/screenshots/title.jpg) | ![A run in the Rapids: rocks with their wakes, a ladybug power-up and a x1.75 near-miss chain](docs/screenshots/rapids.jpg) | ![A run in the Lily Marsh: lily pads, a crumb trail and a near-miss](docs/screenshots/lily-marsh.jpg) |
+| **Night River** | **Crumb shop** | **Game over** |
+| ![The Night River: glowing rain circles and fireflies around the leaf](docs/screenshots/night-river.jpg) | ![The crumb shop with six ant skins](docs/screenshots/shop.jpg) | ![Game over with stats, crumbs earned, a badge and the streak](docs/screenshots/game-over.jpg) |
 
 ## Features
 
-- **Telegraphed rain.** A shadow and a closing ring mark every drop's
-  landing spot, and the ring meets the edge at the moment of impact. Each hit
+- **Telegraphed rain.** A pale dashed rain circle with a 💧 and a closing
+  ring mark every drop's landing spot, and the ring meets the edge at the
+  moment of impact. Rocks are brown stones with a wake, so rain and rocks
+  never look alike. Each hit
   is readable in advance, so a hit is on you, not on luck.
 - **Near-miss combos.** Clear a splash by a hair to score bonus points and
   grow your multiplier up to **x5**.
