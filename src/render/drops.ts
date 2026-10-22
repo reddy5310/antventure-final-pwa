@@ -1,17 +1,21 @@
 // Raindrop telegraphs, the most important readability element in the game.
 //
-// Reading order for the player:
-//   1. a dark disc appears exactly the size of the splash and darkens as impact nears;
+// Reading order for the player (it must never look like a rock, which is a solid,
+// warm, dark-edged thing):
+//   1. a pale, slowly turning DASHED "rain circle" appears exactly the size of the
+//      splash and fills with light blue as impact nears; a dashed line says
+//      "zone", never "solid object". A small teardrop sits in its centre;
 //   2. a bright ring (with a dark outline so it reads on light leaf and dark water
-//      alike) closes in on the disc edge: ring meets edge = impact;
+//      alike) closes in on the circle edge: ring meets edge = impact. The ring is
+//      the timer and is always drawn on top of everything else;
 //   3. in the last moment the drop itself streaks in from above.
 // Aimed drops carry four inward ticks on the ring (shape, not colour). When the
 // ant is inside a splash zone the ring gets thicker and pulses, so "you are in
 // it" reads by thickness and motion, not hue alone.
 //
 // At night (world.darkness rising) telegraphs are drawn above the darkness and
-// GLOW: the splash zone fills with pale light, the rim brightens and every ring
-// gets a halo, so they are easier to read in the dark than by day.
+// GLOW: the splash zone fills with pale light, the dashed rim brightens and every
+// ring gets a halo, so they are easier to read in the dark than by day.
 
 import { ANT_HIT_R } from '../config';
 import type { Drop, World } from '../types';
@@ -25,6 +29,27 @@ const STREAK_HEIGHT = 150;
 /** How far outside r the closing ring starts (multiple of r). */
 const RING_START = 1.25;
 
+/** Dashed rim: one dash plus one gap is about this long (units); the rim is fitted to a whole number of them. */
+const DASH_PERIOD = 11;
+/** Share of each period that is dash (6 of 11). */
+const DASH_ON = 6 / 11;
+/** Rim turn speed along the circle (units per second). */
+const DASH_SPEED = 10;
+/** Reused for every setLineDash call (rewritten per drop) so no array is allocated per frame. */
+const DASH: number[] = [DASH_PERIOD * DASH_ON, DASH_PERIOD * (1 - DASH_ON)];
+const NO_DASH: number[] = [];
+
+// Teardrop: a circle of radius b with the tip D = 2.1 b above its centre, joined by tangent
+// lines. The tangent points sit at angle PHI either side of straight up.
+const TEAR_D = 2.1;
+const TEAR_SIN = Math.sqrt(1 - 1 / (TEAR_D * TEAR_D));
+const TEAR_COS = 1 / TEAR_D;
+const TEAR_PHI = Math.acos(TEAR_COS);
+/** Circle radius per unit of half-height hh: the whole icon is (D + 1) b = 2 hh tall. */
+const TEAR_B = 2 / (TEAR_D + 1);
+/** The real drop streaks in during the last STREAK_TIME; the icon is gone for the final stretch. */
+const TEAR_FADE = 0.1;
+
 /** `drops` defaults to the world's; the menu backdrop passes its cosmetic demo drops. */
 export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.drops): void {
   if (!drops.length) return;
@@ -35,23 +60,18 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
   const night = clamp01(world.darkness) * (world.state === 'attract' ? 0.6 : 1);
   g.world();
 
-  // Pass 1: shadows. Drawn first for every drop so overlapping zones never hide a ring.
+  // Pass 1: rain circles. Drawn first for every drop so overlapping zones never hide a ring.
   for (let i = 0; i < drops.length; i++) {
     const d = drops[i];
     if (d.age < 0) continue;
     const t = d.fall > 0 ? clamp01(d.age / d.fall) : 1;
     const fade = clamp01(d.age / 0.12);
-    // A dark disc is invisible on dark water, so at night the shadow thins out
-    // and the splash zone fills with pale light instead.
-    ctx.globalAlpha = (0.16 + 0.42 * t * t) * fade * (1 - 0.6 * night);
-    ctx.fillStyle = P.shadow;
+    // A pale fill that strengthens as impact nears (no dark disc: that read as a rock).
+    // At night the blue thins out and the nightFoam light below takes over.
+    ctx.globalAlpha = (0.12 + 0.22 * t * t) * fade * (1 - 0.4 * night);
+    ctx.fillStyle = P.rainFill;
     ctx.beginPath();
     ctx.arc(d.x, d.y, d.r, 0, TAU);
-    ctx.fill();
-    // A darker, growing core: the shadow focusing as the drop gets closer.
-    ctx.globalAlpha = (0.12 + 0.34 * t) * fade * (1 - 0.5 * night);
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r * (0.22 + 0.5 * t), 0, TAU);
     ctx.fill();
     if (night > 0.02) {
       ctx.globalAlpha = night * (0.07 + 0.16 * t) * fade;
@@ -62,7 +82,50 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
     }
   }
 
-  // Pass 2: zone edge, closing ring, aimed ticks.
+  // Pass 2: the dashed rim and the teardrop of every drop (rings come after, so they are always on top).
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < drops.length; i++) {
+    const d = drops[i];
+    if (d.age < 0) continue;
+    const t = d.fall > 0 ? clamp01(d.age / d.fall) : 1;
+    const fade = clamp01(d.age / 0.12);
+    const remaining = d.fall - d.age;
+    const urgent = remaining < 0.28;
+    const rimW = (urgent ? 2.4 : 2) + 0.8 * night;
+    // The rim turns slowly (a still dashed circle looks like a printed target); reduced motion keeps it still.
+    const spin = g.reduced ? 0 : -g.t * DASH_SPEED;
+    // Dark under-stroke first, a little longer and wider than the dashes it backs, so each light
+    // dash is outlined and reads on the pale Marsh water as well as on dark water.
+    ctx.lineCap = 'butt';
+    ctx.globalAlpha = (0.3 + 0.1 * t) * fade;
+    ctx.strokeStyle = P.ringDark;
+    ctx.lineWidth = rimW + 1.6;
+    fitDash(ctx, d.r, 1.6);
+    ctx.lineDashOffset = spin + 0.8;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha = Math.min(0.95, (0.5 + 0.4 * t) * (1 + 0.5 * night)) * fade;
+    ctx.strokeStyle = P.rainRim;
+    ctx.lineWidth = rimW;
+    fitDash(ctx, d.r, 0);
+    ctx.lineDashOffset = spin;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, TAU);
+    ctx.stroke();
+    // Solid again for everything that follows.
+    ctx.setLineDash(NO_DASH);
+    ctx.lineDashOffset = 0;
+
+    // Teardrop in the centre, gone for the last moment when the real drop streaks in.
+    const tearA = fade * clamp01(remaining / TEAR_FADE);
+    if (tearA > 0.01) {
+      ctx.globalAlpha = tearA;
+      teardrop(ctx, d.x, d.y, d.r * (0.32 + 0.22 * t));
+    }
+  }
+
+  // Pass 3: closing ring, aimed ticks.
   ctx.lineCap = 'round';
   for (let i = 0; i < drops.length; i++) {
     const d = drops[i];
@@ -73,14 +136,6 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
     const threat = alive && isThreat(d, ant.x, ant.y);
     const urgent = remaining < 0.28;
     const pulse = threat && !g.reduced ? 0.5 + 0.5 * Math.sin(g.t * 26) : 0;
-
-    // Zone edge: a faint light rim so the size reads on dark water too.
-    ctx.globalAlpha = Math.min(0.95, (0.16 + 0.34 * t) * (1 + 1.3 * night)) * fade;
-    ctx.strokeStyle = P.ringLight;
-    ctx.lineWidth = (urgent ? 1.6 : 1) + 0.8 * night;
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, TAU);
-    ctx.stroke();
 
     // Closing ring.
     const rr = d.r * (1 + RING_START * (1 - t) ** 1.35);
@@ -112,7 +167,7 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
     ctx.stroke();
   }
 
-  // Pass 3: the drop itself, streaking in from above for the last moment.
+  // Pass 4: the drop itself, streaking in from above for the last moment.
   for (let i = 0; i < drops.length; i++) {
     const d = drops[i];
     const remaining = d.fall - d.age;
@@ -147,6 +202,45 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+/** Sets a dash pattern that fits the circle exactly (no ragged seam); `pad` lengthens each dash for the under-stroke. */
+function fitDash(ctx: CanvasRenderingContext2D, r: number, pad: number): void {
+  const n = Math.max(6, Math.round((TAU * r) / DASH_PERIOD));
+  const period = (TAU * r) / n;
+  DASH[0] = period * DASH_ON + pad;
+  DASH[1] = period - DASH[0];
+  ctx.setLineDash(DASH);
+}
+
+/**
+ * A raindrop icon centred on (x, y), `hh` tall above and below the centre: point up, round
+ * bottom, pale body, dark outline and a highlight. Uses the current globalAlpha.
+ */
+function teardrop(ctx: CanvasRenderingContext2D, x: number, y: number, hh: number): void {
+  const b = hh * TEAR_B;
+  const cy = y + hh - b;
+  const top = y - hh;
+  const tx = b * TEAR_SIN;
+  const ty = cy - b * TEAR_COS;
+  // Slightly concave sides (control point pulled toward the axis) give the classic drop silhouette.
+  const cx = tx * 0.3;
+  const cyc = (top + ty) / 2;
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.quadraticCurveTo(x + cx, cyc, x + tx, ty);
+  ctx.arc(x, cy, b, -Math.PI / 2 + TEAR_PHI, (3 * Math.PI) / 2 - TEAR_PHI);
+  ctx.quadraticCurveTo(x - cx, cyc, x, top);
+  ctx.closePath();
+  ctx.fillStyle = P.dropBody;
+  ctx.fill();
+  ctx.strokeStyle = P.ringDark;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  ctx.fillStyle = P.white;
+  ctx.beginPath();
+  ctx.arc(x - b * 0.38, cy - b * 0.22, b * 0.26, 0, TAU);
+  ctx.fill();
 }
 
 function isThreat(d: Drop, ax: number, ay: number): boolean {

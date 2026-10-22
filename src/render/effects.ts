@@ -1,6 +1,7 @@
 // Transient effects spawned from game events: pooled particles (struct of
 // arrays, nothing allocated per frame), rings and whoosh arcs, floating
-// near-miss text, screen shake and the hit vignette. Effects on the water are
+// near-miss text, short hit words ("Splash!", "Bonk!", "Snap!") that tell the
+// three hazards apart, screen shake and the hit vignette. Effects on the water are
 // anchored to the river (they scroll with it); effects on the leaf or in the
 // air are anchored to the screen (they stay with the ant).
 //
@@ -21,6 +22,17 @@ const MAXT = 8;
 /** Pickup labels ("+30", "PERFECT TRAIL") and power-up icon pops. */
 const MAXL = 4;
 const MAXI = 3;
+/** Hit words: a tiny pool (hits are spaced by the invulnerability window). */
+const MAXH = 4;
+/** One word per hazard kind (drop, rock, twig), set once so a hit allocates nothing. */
+const HIT_WORDS: readonly string[] = ['Splash!', 'Bonk!', 'Snap!'];
+/** Light blue rain, warm river stone, bark lifted a little so it still reads on water. */
+const HIT_FILLS: readonly string[] = [P.rainFill, P.rockTop, '#d9a86c'];
+const HIT_LIFE = 0.75;
+const HIT_RISE = 26;
+/** Spawned above the hit point so the word never covers the ant. */
+const HIT_LIFT = 32;
+const HIT_FONT = `700 20px ${FONT_FAMILY}`;
 /** Floating text: lifetime (s) and how far it rises (units). */
 const TEXT_LIFE = 0.95;
 const TEXT_RISE = 34;
@@ -144,6 +156,13 @@ export class Effects {
   private tpts = new Float32Array(MAXT);
   private tNext = 0;
 
+  // Hit words.
+  private hx = new Float32Array(MAXH);
+  private hy = new Float32Array(MAXH);
+  private hage = new Float32Array(MAXH).fill(99);
+  private hkind = new Uint8Array(MAXH);
+  private hNext = 0;
+
   // Pickup labels and icon pops.
   private lx = new Float32Array(MAXL);
   private ly = new Float32Array(MAXL);
@@ -186,6 +205,7 @@ export class Effects {
     this.plife.fill(0);
     this.rlife.fill(0);
     this.tage.fill(99);
+    this.hage.fill(99);
     this.lage.fill(99);
     this.iage.fill(99);
     this.crumbLabel = -1;
@@ -244,6 +264,7 @@ export class Effects {
         if (!reduced) this.shake = Math.max(this.shake, 1);
         this.ring(e.x, e.y, NaN, 14, 52, 0.5, 5, C_DANGER);
         this.ring(e.x, e.y, NaN, 10, 30, 0.35, 2, C_FOAM, 0.05);
+        this.hitWord(e.x, e.y, e.source === 'drop' ? 0 : e.source === 'rock' ? 1 : 2);
         if (e.source === 'drop') {
           this.burst(DROPLET, e.x, e.y, NaN, 16, 50, 140, C_DROP, 1.7, 0.6);
         } else {
@@ -450,6 +471,7 @@ export class Effects {
       else this.rlife[i] -= dt;
     }
     for (let i = 0; i < MAXT; i++) if (this.tage[i] < 9) this.tage[i] += dt;
+    for (let i = 0; i < MAXH; i++) if (this.hage[i] < 9) this.hage[i] += dt;
     for (let i = 0; i < MAXL; i++) if (this.lage[i] < 9) this.lage[i] += dt;
     for (let i = 0; i < MAXI; i++) if (this.iage[i] < 9) this.iage[i] += dt;
   }
@@ -568,6 +590,7 @@ export class Effects {
     const { ctx } = g;
     let any = false;
     for (let i = 0; i < MAXT; i++) if (this.tage[i] < TEXT_LIFE) any = true;
+    for (let i = 0; i < MAXH; i++) if (this.hage[i] < HIT_LIFE) any = true;
     for (let i = 0; i < MAXL; i++) if (this.lage[i] < LABEL_LIFE[this.lstyle[i]]) any = true;
     for (let i = 0; i < MAXI; i++) if (this.iage[i] < ICON_LIFE) any = true;
     if (!any) return;
@@ -612,8 +635,25 @@ export class Effects {
       }
     }
 
-    // Pickup labels: the crumb total and the banners.
+    // Hit words: pop in, rise (or just fade with reduced motion) and go. Same look as the near-miss text.
     ctx.textAlign = 'center';
+    ctx.font = HIT_FONT;
+    for (let i = 0; i < MAXH; i++) {
+      const a = this.hage[i];
+      if (a >= HIT_LIFE) continue;
+      const pop = g.reduced ? 1 : a < 0.16 ? Math.max(0.01, easeOutBack(a / 0.16)) : 1;
+      const rise = g.reduced ? 0 : easeOutCubic(a / HIT_LIFE) * HIT_RISE;
+      ctx.globalAlpha = Math.min(clamp01(a / 0.06), a > 0.5 ? 1 - (a - 0.5) / (HIT_LIFE - 0.5) : 1);
+      g.local(this.hx[i], this.hy[i] - rise, 0, pop);
+      const k = this.hkind[i];
+      ctx.strokeStyle = P.ink;
+      ctx.lineWidth = 5;
+      ctx.strokeText(HIT_WORDS[k], 0, 0);
+      ctx.fillStyle = HIT_FILLS[k];
+      ctx.fillText(HIT_WORDS[k], 0, 0);
+    }
+
+    // Pickup labels: the crumb total and the banners.
     for (let i = 0; i < MAXL; i++) {
       const a = this.lage[i];
       const st = this.lstyle[i];
@@ -726,6 +766,16 @@ export class Effects {
     this.rdelay[i] = delay;
     this.ra0[i] = a0;
     this.ralen[i] = alen;
+  }
+
+  /** kind: 0 drop, 1 rock, 2 twig. Clamped like the near-miss text so the word stays in the field. */
+  private hitWord(x: number, y: number, kind: number): void {
+    const i = this.hNext;
+    this.hNext = (i + 1) % MAXH;
+    this.hx[i] = Math.min(360, Math.max(40, x));
+    this.hy[i] = y - HIT_LIFT;
+    this.hage[i] = 0;
+    this.hkind[i] = kind;
   }
 
   private newLabel(x: number, y: number, style: number, text: string, col: string, points: number): number {
