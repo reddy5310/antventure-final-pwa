@@ -494,16 +494,18 @@ export class Water {
         const e = hash(seed ^ 0xc40f, k);
         const q = hash(seed ^ 0xc412, k);
         const cx = e < 0.4 ? l + 10 + q * (r - l - 20) : e < 0.7 ? l + 8 + q * q * (r - l) * 0.4 : r - 8 - q * q * (r - l) * 0.4;
+        // A patch is a few near-parallel streaks that all lean the same way, like
+        // foam stretched out by the current (random scribbles read as letters).
         const n = 3 + Math.floor(hash(seed ^ 0xc413, k) * 3);
+        const curl = (hash(seed ^ 0xc411, k) - 0.5) * 7;
         for (let i = 0; i < n; i++) {
-          const ox = (hash(seed ^ 0xc414, k, i) - 0.5) * 16;
-          const oy = (hash(seed ^ 0xc415, k, i) - 0.5) * 22;
-          const len = 5 + hash(seed ^ 0xc410, k, i) * 12;
-          const curl = (hash(seed ^ 0xc411, k, i) - 0.5) * 10;
+          const ox = (i - (n - 1) / 2) * (3.4 + hash(seed ^ 0xc414, k, i) * 2.2);
+          const oy = (hash(seed ^ 0xc415, k, i) - 0.5) * 20;
+          const len = 8 + hash(seed ^ 0xc410, k, i) * 17;
           const x = cx + ox;
           const y = cy + oy;
           ctx.moveTo(x, y - len / 2);
-          ctx.quadraticCurveTo(x + curl, y, x - curl * 0.3, y + len / 2);
+          ctx.quadraticCurveTo(x + curl, y, x + curl * 0.35, y + len / 2);
         }
       }
       ctx.stroke();

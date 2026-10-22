@@ -50,6 +50,12 @@ const MAX_VOICES = 26;
 const MAX_LOW_VOICES = 16;
 /** Near-misses in the same instant are strummed rather than stacked. */
 const NEAR_MISS_STRUM = 0.06;
+/** So are crumbs (honey pulls several in at once); tighter, since they are shorter. */
+const CRUMB_STRUM = 0.04;
+/** A crumb that would have to wait longer than this for its slot is skipped: late plucks smear. */
+const CRUMB_MAX_WAIT = 0.14;
+/** Music lowpass (Hz) at full night darkness: the jungle closes in, nothing harsh. */
+const NIGHT_CUTOFF = 4200;
 /** Distant thunder rolls on its own once the storm is this strong. */
 const RUMBLE_INTENSITY = 0.5;
 const RUMBLE_GAP = 6;
@@ -123,6 +129,8 @@ export class AudioManager {
   private splashTokens = SPLASH_BURST;
   private splashAt = 0;
   private lastNearMiss = -1;
+  private lastCrumb = -1;
+  private darkness = 0;
   private lastThunder = -RUMBLE_GAP;
   private nextRumble = 0;
   /** End times of the voices still sounding. */
@@ -193,6 +201,26 @@ export class AudioManager {
     }
   }
 
+  /**
+   * 0..1 night darkness at the leaf (world.darkness). Muffles the music a little
+   * so the Night River sounds closer and quieter than day. Cheap to call every
+   * frame: it only touches the audio graph when the value has moved.
+   */
+  setDarkness(v: number): void {
+    const next = clamp01(Number.isFinite(v) ? v : 0);
+    // Ignore tiny moves, but always settle exactly on day (0) so the music fully reopens.
+    if (next === this.darkness || (next !== 0 && Math.abs(next - this.darkness) < 0.02)) return;
+    this.darkness = next;
+    const ctx = this.ctx;
+    const bus = this.bus;
+    if (!ctx || !bus) return;
+    try {
+      toward(bus.musicFilter.frequency, this.musicCutoff(SCENES[this.scene].cutoff), ctx.currentTime, 0.6);
+    } catch {
+      // Ignore.
+    }
+  }
+
   play(sfx: Sfx, opts?: PlayOptions): void {
     const ctx = this.ctx;
     const kit = this.kit;
@@ -210,6 +238,11 @@ export class AudioManager {
         if (t < this.lastNearMiss + NEAR_MISS_STRUM) t = this.lastNearMiss + NEAR_MISS_STRUM;
         this.lastNearMiss = t;
       }
+      if (sfx === 'crumb') {
+        if (t < this.lastCrumb + CRUMB_STRUM) t = this.lastCrumb + CRUMB_STRUM;
+        if (t - now > CRUMB_MAX_WAIT) return;
+        this.lastCrumb = t;
+      }
       if (sfx === 'thunder') this.lastThunder = now;
 
       const volume = Math.max(0, Math.min(1.5, opts?.volume ?? 1)) * spec.level;
@@ -220,6 +253,8 @@ export class AudioManager {
       if (sfx === 'hit') this.duck(0.45, 0.2, 0.5);
       else if (sfx === 'death') this.duck(0.3, 0.6, 1.2);
       else if (sfx === 'new-best') this.duck(0.6, 0.6, 0.6);
+      else if (sfx === 'zone') this.duck(0.7, 0.5, 0.7);
+      else if (sfx === 'power') this.duck(0.8, 0.25, 0.4);
     } catch {
       // A missing node type on an old browser costs one sound, never the game.
     }
@@ -396,11 +431,17 @@ export class AudioManager {
       const now = ctx.currentTime;
       const sc = SCENES[this.scene];
       toward(bus.musicScene.gain, sc.music, now, sc.tc);
-      toward(bus.musicFilter.frequency, sc.cutoff, now, sc.tc);
+      toward(bus.musicFilter.frequency, this.musicCutoff(sc.cutoff), now, sc.tc);
       this.applyIntensity(now);
     } catch {
       // Ignore.
     }
+  }
+
+  /** The scene's music cutoff, pulled down towards NIGHT_CUTOFF (log scale) as darkness rises. */
+  private musicCutoff(sceneCutoff: number): number {
+    if (this.darkness <= 0 || sceneCutoff <= NIGHT_CUTOFF) return sceneCutoff;
+    return sceneCutoff * Math.pow(NIGHT_CUTOFF / sceneCutoff, this.darkness);
   }
 
   private applyIntensity(now: number, immediate = false): void {

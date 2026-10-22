@@ -16,6 +16,7 @@ import { hasPower } from '../game/powers';
 import type { World } from '../types';
 import { makeSprite, type Gfx, type Sprite } from './gfx';
 import { ZP } from './palette';
+import { PAD_R0, ROCK_R0, padIndex, padPath, rockIndex, rockPath } from './silhouettes';
 import { TAU, clamp01, hash, smoothstep } from './util';
 
 /** Radius (units) at which the light has faded to half: the "pool of light". */
@@ -33,7 +34,6 @@ const AHEAD = 20;
 
 const FIREFLY_SLOT = 62;
 const CAP_SLOT = 84;
-const OUTLINE_REACH = 1.02;
 
 /** 0 at the leaf, rising smoothly to 1 at the mask's edge (the fraction of full darkness). */
 function profile(rho: number): number {
@@ -183,9 +183,12 @@ export class NightArt {
   }
 
   /**
-   * Obstacles beyond the light keep a faint glowing foam outline, brighter the
-   * darker their spot is, so every hazard stays readable (but nothing about
-   * them is lit: the shape, not the detail).
+   * Obstacles beyond the light keep a faint glowing outline, brighter the
+   * darker their spot is, so every hazard stays readable (the shape, not the
+   * detail). The outline follows the obstacle's own silhouette (a faceted rock,
+   * a lily pad with its notch, a twig's capsule) and is cooler and dimmer than
+   * a telegraph ring on purpose: a dark disc with a bright circle at night must
+   * only ever mean "rain is coming".
    */
   private drawOutlines(g: Gfx, world: World, cx: number, cy: number, half: number, dark: number): void {
     const list = world.obstacles;
@@ -193,7 +196,6 @@ export class NightArt {
     const { ctx, t } = g;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = ZP.nightFoam;
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
       const ext = o.r + o.len;
@@ -209,21 +211,40 @@ export class NightArt {
       if (o.kind === 'twig') {
         g.local(o.x, o.y, o.angle);
         this.capsule(ctx, o.len, o.r + 2);
+        this.edge(ctx, null, a, 1.5);
+      } else if (o.kind === 'rock') {
+        const s = (o.r / ROCK_R0) * 1.1;
+        g.local(o.x, o.y, o.angle, s);
+        this.edge(ctx, rockPath(rockIndex(o.variant)), a, 1.5 / s);
       } else {
-        g.world();
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r * (o.kind === 'rock' ? 1.14 : OUTLINE_REACH + 0.06), 0, TAU);
+        const s = (o.r / PAD_R0) * 1.06;
+        g.local(o.x, o.y, o.angle, s);
+        this.edge(ctx, padPath(padIndex(o.variant)), a, 1.5 / s);
       }
-      // A wide faint halo, then the crisp outline on top.
-      ctx.globalAlpha = a * 0.2;
-      ctx.lineWidth = 6;
-      ctx.stroke();
-      ctx.globalAlpha = a * 0.75;
-      ctx.lineWidth = 1.7;
-      ctx.stroke();
     }
     ctx.globalAlpha = 1;
     g.world();
+  }
+
+  /**
+   * Fills (a faint body, so a hidden hazard reads as an object and not as a hole
+   * in the water) and strokes (a wide faint halo, then the crisp edge) either
+   * `path` or, when null, the current path.
+   */
+  private edge(ctx: CanvasRenderingContext2D, path: Path2D | null, a: number, lw: number): void {
+    ctx.fillStyle = ZP.nightRockFill;
+    ctx.strokeStyle = ZP.nightRockEdge;
+    ctx.globalAlpha = a * 0.16;
+    if (path) ctx.fill(path);
+    else ctx.fill();
+    ctx.globalAlpha = a * 0.14;
+    ctx.lineWidth = lw * 3.6;
+    if (path) ctx.stroke(path);
+    else ctx.stroke();
+    ctx.globalAlpha = a * 0.62;
+    ctx.lineWidth = lw;
+    if (path) ctx.stroke(path);
+    else ctx.stroke();
   }
 
   private capsule(ctx: CanvasRenderingContext2D, len: number, h: number): void {
@@ -274,6 +295,8 @@ export class NightArt {
     const glow = this.glow;
     if (!glow) return;
     const { ctx, t } = g;
+    // Reduced motion: they hover where they are instead of wandering.
+    const wander = g.reduced ? 0 : t;
     const seed = world.seed;
     const dBot = g.dist + g.py - g.viewH - 60;
     const dTop = g.dist + g.py + 60;
@@ -287,7 +310,7 @@ export class NightArt {
         if (h > 0.8) continue;
         const ph = hash(seed ^ 0xf1ff, k, j) * TAU;
         const d0 = k * FIREFLY_SLOT + h * (FIREFLY_SLOT / 0.8);
-        const y = g.yOfD(d0) + Math.cos(t * 0.27 + ph * 1.3) * 18 + Math.sin(t * 0.71 + ph) * 4;
+        const y = g.yOfD(d0) + Math.cos(wander * 0.27 + ph * 1.3) * 18 + Math.sin(wander * 0.71 + ph) * 4;
         if (y < -20 || y > g.viewH + 20) continue;
         const l = g.leftAt(y);
         const r = g.rightAt(y);
@@ -297,7 +320,7 @@ export class NightArt {
         if (side < 0.35) x = l - 6 - reach * Math.min(150, Math.max(10, l - g.viewL - 6));
         else if (side < 0.7) x = r + 6 + reach * Math.min(150, Math.max(10, g.viewR - r - 6));
         else x = l + 14 + (r - l - 28) * reach;
-        x += Math.sin(t * 0.31 + ph) * 16 + Math.sin(t * 0.83 + ph * 2) * 5;
+        x += Math.sin(wander * 0.31 + ph) * 16 + Math.sin(wander * 0.83 + ph * 2) * 5;
         // Blink in and out (a steady glimmer under reduced motion).
         const blink = g.reduced ? 0.75 : 0.5 + 0.5 * Math.sin(t * (0.9 + hash(seed ^ 0xf202, k, j) * 1.4) + ph * 3);
         let a = blink ** 1.5 * vis * 0.9;

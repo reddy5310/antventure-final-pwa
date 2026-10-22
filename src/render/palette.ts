@@ -190,6 +190,9 @@ export const ZP = {
   nightMask: '#02060f',
   nightFoam: '#bfe6ff',
   nightFoamGlow: '#6fb4ff',
+  /** Obstacle outlines in the dark: cooler and dimmer than a telegraph ring, so they never read as rain. */
+  nightRockEdge: '#86bcd6',
+  nightRockFill: '#5a8cb0',
   nightGlow: '#9fd4ff',
   moonGlint: '#dcecff',
   fireflyCore: '#f4ffb0',

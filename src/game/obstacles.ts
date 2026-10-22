@@ -204,8 +204,11 @@ function layoutAt(world: World, st: SimState, d: number): void {
 
 /** Lays out every obstacle that has come within lookahead (live runs only). */
 export function layoutObstacles(world: World, st: SimState): void {
-  // On very tall screens look further ahead so nothing pops in on screen.
-  const lookahead = Math.max(SPAWN_AHEAD, world.player.y + 60);
+  // On very tall screens look further ahead so nothing pops in on screen. The
+  // extra 280 keeps the obstacle stream ahead of the pickups, which are laid
+  // out only once it has passed them (pickups.ts), so they too appear above
+  // the top edge. Twig drift is keyed to SPAWN_AHEAD, so this moves nothing.
+  const lookahead = Math.max(SPAWN_AHEAD, world.player.y + 60) + 280;
   while (st.nextObstacleD <= world.distance + lookahead) layoutAt(world, st, st.nextObstacleD);
 }
 

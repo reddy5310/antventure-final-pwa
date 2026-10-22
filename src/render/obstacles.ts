@@ -11,41 +11,22 @@ import type { Obstacle, World } from '../types';
 import { makeSprite, type Gfx, type Sprite } from './gfx';
 import { P, ZP } from './palette';
 import { TAU, clamp01, frac, hash, makeRand } from './util';
+import { PAD_R0, PAD_VARIANTS, ROCK_R0 as R0, ROCK_VARIANTS as VARIANTS, padIndex, padNotch, padSeed, rockIndex, rockSeed, rockShape, traceRock, tracePad } from './silhouettes';
 import { frameLook, type ZoneLook } from './zonelook';
 
-/** Reference radius the rock sprites are rendered at; scaled to each rock's r. */
-const R0 = 34;
-const VARIANTS = 6;
-/** Reference radius of the lily pad sprites (pads are 18..30 units). */
-const PAD_R0 = 30;
-const PAD_VARIANTS = 4;
 /** Spray droplets thrown off each rock in white water. */
 const SPRAY_N = 10;
 
 function rockSprite(ppu: number, seed: number): Sprite {
-  const rand = makeRand(seed);
-  const verts = 7 + Math.floor(rand() * 3);
-  const rs: number[] = [];
   // Irregular but averaging ~0.93 of R0, so the drawn rock matches its collision circle.
-  for (let i = 0; i < verts; i++) rs.push(R0 * (0.8 + rand() * 0.26));
+  const outline = rockShape(seed);
+  const rand = outline.rand;
   const mossy = seed % 2 === 0;
   const size = R0 * 2.3;
   return makeSprite(size, size, ppu, (c) => {
     const shape = (s: number, ox: number, oy: number) => {
       c.beginPath();
-      for (let i = 0; i <= verts; i++) {
-        const a0 = (i / verts) * TAU;
-        const a1 = ((i + 1) / verts) * TAU;
-        const p0x = ox + Math.cos(a0) * rs[i % verts] * s;
-        const p0y = oy + Math.sin(a0) * rs[i % verts] * s;
-        const p1x = ox + Math.cos(a1) * rs[(i + 1) % verts] * s;
-        const p1y = oy + Math.sin(a1) * rs[(i + 1) % verts] * s;
-        const mx = (p0x + p1x) / 2;
-        const my = (p0y + p1y) / 2;
-        if (i === 0) c.moveTo(mx, my);
-        else c.quadraticCurveTo(p0x, p0y, mx, my);
-      }
-      c.closePath();
+      traceRock(c, outline, s, ox, oy);
     };
     c.shadowColor = 'rgba(0, 12, 20, 0.5)';
     c.shadowBlur = 3 * ppu;
@@ -123,15 +104,15 @@ function rockSprite(ppu: number, seed: number): Sprite {
  */
 function padSprite(ppu: number, seed: number): Sprite {
   const rand = makeRand(seed);
-  const notch = 0.3 + rand() * 0.16;
+  const notch = padNotch(seed);
+  // The notch is the first draw of the stream (padNotch uses the same one).
+  rand();
   const size = PAD_R0 * 2.5;
   const R = PAD_R0;
   return makeSprite(size, size, ppu, (c) => {
     const body = (r: number, ox: number, oy: number) => {
       c.beginPath();
-      c.moveTo(ox, oy);
-      c.arc(ox, oy, r, notch / 2, TAU - notch / 2);
-      c.closePath();
+      tracePad(c, notch, r, ox, oy);
     };
     // Underside and the soft halo that seats the pad on the water.
     c.shadowColor = 'rgba(1, 26, 20, 0.55)';
@@ -221,9 +202,9 @@ export class ObstacleArt {
 
   build(ppu: number): void {
     this.rocks = [];
-    for (let i = 0; i < VARIANTS; i++) this.rocks.push(rockSprite(ppu, 300 + i));
+    for (let i = 0; i < VARIANTS; i++) this.rocks.push(rockSprite(ppu, rockSeed(i)));
     this.pads = [];
-    for (let i = 0; i < PAD_VARIANTS; i++) this.pads.push(padSprite(ppu, 400 + i));
+    for (let i = 0; i < PAD_VARIANTS; i++) this.pads.push(padSprite(ppu, padSeed(i)));
   }
 
   draw(g: Gfx, world: World): void {
@@ -369,7 +350,7 @@ export class ObstacleArt {
   }
 
   private padBody(g: Gfx, o: Obstacle, world: World): void {
-    const s = this.pads[Math.min(PAD_VARIANTS - 1, Math.floor(o.variant * PAD_VARIANTS))];
+    const s = this.pads[padIndex(o.variant)];
     if (!s) return;
     // The pad bobs a little on the water (not with reduced motion) and dips a
     // hair under the leaf's weight.
@@ -378,7 +359,7 @@ export class ObstacleArt {
   }
 
   private rockBody(g: Gfx, o: Obstacle): void {
-    const s = this.rocks[Math.min(VARIANTS - 1, Math.floor(o.variant * VARIANTS))];
+    const s = this.rocks[rockIndex(o.variant)];
     if (!s) return;
     g.sprite(s, o.x, o.y, o.angle, o.r / R0);
   }

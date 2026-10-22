@@ -20,6 +20,14 @@ const CHIME_ROOT = 69;
 /** ...for this many steps (A4 → C#7), then stay at the top. */
 const CHIME_TOP_STEP = 12;
 
+/**
+ * Crumb plucks start on E5 (the 4th degree of that pentatonic, so they sit above
+ * the near-miss chimes' root) and climb one step per crumb in a trail...
+ */
+const CRUMB_FIRST_STEP = 3;
+/** ...to at most this many steps up: a trail has 9 crumbs, so it ends well under C#7. */
+const CRUMB_TOP_STEP = 9;
+
 // Glockenspiel-like bar: inharmonic modes that die faster the higher they are.
 const BAR_RATIO = [1, 2.756, 5.404];
 const BAR_AMP = [1, 0.3, 0.1];
@@ -59,6 +67,50 @@ function softNote(
     o.detune.value = cents;
     if (bendTo > 0) glide(o.frequency, t + attack + hold * 0.5, f, bendTo, hold * 0.5 + release);
   }
+}
+
+/**
+ * A short, bright pluck: detuned triangles through a lowpass that closes as the
+ * note dies (the way a plucked string loses its highs first), plus a quick octave
+ * overtone and a tick. Meant to be heard many times in a row, so it stays small.
+ */
+function pluck(v: Voice, t: number, f: number, peak: number): void {
+  const g = v.gain(v.out);
+  const lp = v.filter('lowpass', f * 5, 0.9, g);
+  glide(lp.frequency, t, f * 5, f * 2, 0.16);
+  const end = perc(g.gain, t, 0.002, peak, 0.2);
+  for (const cents of [-5, 5]) {
+    const o = v.osc('triangle', f, t, end, lp);
+    o.detune.value = cents;
+  }
+  const og = v.gain(v.out);
+  v.osc('sine', f * 2, t, perc(og.gain, t, 0.001, peak * 0.25, 0.07), og);
+  const tick = v.gain(v.out);
+  const hp = v.filter('highpass', 4000, 0.7, tick);
+  v.noise(t, perc(tick.gain, t, 0.001, peak * 0.08, 0.012), hp);
+}
+
+/** A soft sine blip that slips a little downwards as it fades. */
+function blip(v: Voice, t: number, f: number, peak: number, dest: AudioNode): void {
+  const g = v.gain(dest);
+  const o = v.osc('sine', f, t, perc(g.gain, t, 0.004, peak, 0.14), g);
+  glide(o.frequency, t, f, f * 0.94, 0.14);
+  const g2 = v.gain(dest);
+  v.osc('sine', f * 2, t, perc(g2.gain, t, 0.003, peak * 0.15, 0.05), g2);
+}
+
+/** A low, soft heartbeat thump (kept above 100 Hz so phone speakers still carry it). */
+function thump(v: Voice, t: number, peak: number): void {
+  const g = v.gain(v.out);
+  const o = v.osc('sine', 120, t, perc(g.gain, t, 0.004, peak, 0.13), g);
+  glide(o.frequency, t, 125, 70, 0.12);
+}
+
+/** A breath of high noise that swells and fades: the "sparkle dust" under a chime run. */
+function shimmer(v: Voice, t: number, time: number, peak: number): void {
+  const g = v.gain(v.out);
+  const hp = v.filter('highpass', 5000, 0.6, g);
+  v.noise(t, swell(g.gain, t, time * 0.3, peak, 0, time * 0.7), hp);
 }
 
 /** Rising band-passed noise: the "swish" of something going past. */
@@ -297,107 +349,150 @@ export const SFX: Record<Sfx, SfxSpec> = {
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Crumbs: a bright, short pluck. Each crumb in a trail climbs one step up the
+  // pentatonic (combo = streak), so a clean trail plays a little tune.
   crumb: {
     level: 0.5,
-    send: 0.05,
+    send: 0.1,
     low: true,
-    build(v) {
-      const t = v.t;
-      const g = v.gain(v.out);
-      const o = v.osc('sine', 1800, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 1800, 2200, 0.07);
+    build(v, streak) {
+      const step = Math.min(Math.max(1, streak) - 1, CRUMB_TOP_STEP);
+      pluck(v, v.t, pentatonicHz(CHIME_ROOT, CRUMB_FIRST_STEP + step), 0.34);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Perfect trail: a quick sparkle up the scale, landing on a long bright bell.
   trail: {
-    level: 0.5,
-    send: 0.05,
-    low: true,
+    level: 0.8,
+    send: 0.4,
     build(v) {
       const t = v.t;
-      const g = v.gain(v.out);
-      const o = v.osc('sine', 1200, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 1200, 2400, 0.07);
+      const notes = [76, 81, 85, 88, 93, 97];
+      const step = 0.052;
+      notes.forEach((m, i) => {
+        const last = i === notes.length - 1;
+        // Quieter towards the top: sparkle, not shrill.
+        bell(v, t + i * step, midiToHz(m), last ? 0.17 : 0.28 - i * 0.025, last ? 1.3 : 0.5);
+      });
+      // A warm bed under the run keeps it from sounding thin.
+      const lp = v.filter('lowpass', 2000, 0.5, v.out);
+      for (const m of [69, 73, 76]) softNote(v, t, midiToHz(m), 0.1, 0.05, 0.2, 0.7, lp);
+      shimmer(v, t + 0.12, 0.5, 0.05);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Power-up: an airy rise, then a chime chord opens on the peak.
   power: {
-    level: 0.5,
-    send: 0.05,
-    low: true,
+    level: 0.85,
+    send: 0.35,
     build(v) {
       const t = v.t;
+      whoosh(v, t, 400, 5200, 0.36, 0.2);
+      // Glassy riser, an octave glide that fades as the chimes arrive.
       const g = v.gain(v.out);
-      const o = v.osc('sine', 600, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 600, 1500, 0.07);
+      const lp = v.filter('lowpass', 3200, 0.5, g);
+      const end = swell(g.gain, t, 0.12, 0.14, 0.1, 0.18);
+      for (const cents of [-7, 7]) {
+        const o = v.osc('triangle', midiToHz(69), t, end, lp);
+        o.detune.value = cents;
+        glide(o.frequency, t, midiToHz(69), midiToHz(81), 0.3);
+      }
+      bell(v, t + 0.22, midiToHz(81), 0.34, 0.9);
+      bell(v, t + 0.27, midiToHz(88), 0.3, 1.1);
+      bell(v, t + 0.33, midiToHz(93), 0.2, 1.2);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // A power-up wearing off: two soft blips stepping down. Quiet on purpose.
   'power-end': {
     level: 0.5,
-    send: 0.05,
+    send: 0.15,
     low: true,
     build(v) {
       const t = v.t;
-      const g = v.gain(v.out);
-      const o = v.osc('sine', 900, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 900, 500, 0.07);
+      const lp = v.filter('lowpass', 2600, 0.5, v.out);
+      blip(v, t, midiToHz(88), 0.3, lp);
+      blip(v, t + 0.09, midiToHz(83), 0.26, lp);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Shield blocks a hit: a wooden thunk (the hit that did not hurt) with a bell
+  // ringing out of it.
   shield: {
-    level: 0.5,
-    send: 0.05,
-    low: true,
+    level: 0.8,
+    send: 0.25,
     build(v) {
       const t = v.t;
-      const g = v.gain(v.out);
-      const o = v.osc('sine', 400, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 400, 260, 0.07);
+      const f = 205;
+      const g1 = v.gain(v.out);
+      const o1 = v.osc('sine', f, t, perc(g1.gain, t, 0.002, 0.55, 0.14), g1);
+      glide(o1.frequency, t, f * 1.25, f, 0.03);
+      const g2 = v.gain(v.out);
+      v.osc('sine', f * 2.71, t, perc(g2.gain, t, 0.001, 0.2, 0.05), g2);
+      const g3 = v.gain(v.out);
+      const bp = v.filter('bandpass', 1700, 2.5, g3);
+      v.noise(t, perc(g3.gain, t, 0.001, 0.4, 0.03), bp);
+      bell(v, t + 0.018, midiToHz(88), 0.3, 1.0);
+      bell(v, t + 0.05, midiToHz(93), 0.16, 0.8);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Ladybug heals: a warm major chord strummed upwards over a soft lub-dub. It
+  // starts a beat late so it lands as the pickup's own chime (the 'power' sound
+  // plays for the ladybug too) fades, instead of piling on top of it.
   'heart-up': {
-    level: 0.5,
-    send: 0.05,
-    low: true,
+    level: 0.8,
+    send: 0.4,
     build(v) {
-      const t = v.t;
-      const g = v.gain(v.out);
-      const o = v.osc('sine', 700, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 700, 1100, 0.07);
+      const t = v.t + 0.12;
+      const lp = v.filter('lowpass', 2400, 0.5, v.out);
+      [69, 73, 76, 81].forEach((m, i) => softNote(v, t + i * 0.035, midiToHz(m), 0.16, 0.03, 0.18, 0.85, lp));
+      bell(v, t + 0.16, midiToHz(93), 0.2, 0.9);
+      thump(v, t, 0.34);
+      thump(v, t + 0.15, 0.24);
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // New zone: a breath of air, a soft open chord and three rising bells. Neutral
+  // on purpose: it has to suit a sunny marsh as well as the night river.
   zone: {
-    level: 0.5,
-    send: 0.05,
-    low: true,
+    level: 0.8,
+    send: 0.5,
     build(v) {
       const t = v.t;
       const g = v.gain(v.out);
-      const o = v.osc('sine', 500, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 500, 750, 0.07);
+      const bp = v.filter('bandpass', 350, 0.9, g);
+      glide(bp.frequency, t, 350, 2600, 0.7);
+      v.noise(t, swell(g.gain, t, 0.35, 0.2, 0.05, 0.6), bp);
+      const lp = v.filter('lowpass', 1400, 0.5, v.out);
+      for (const m of [57, 64, 71]) softNote(v, t + 0.04, midiToHz(m), 0.1, 0.3, 0.35, 0.8, lp);
+      [76, 83, 88].forEach((m, i) => bell(v, t + 0.3 + i * 0.12, midiToHz(m), 0.24, i === 2 ? 1.3 : 0.8));
     },
   },
 
-  // PLACEHOLDER — replaced by the audio agent.
+  // Lily pad: a soft rubbery boing. The pitch shoots up and settles, wobbling.
   pad: {
-    level: 0.5,
-    send: 0.05,
+    level: 0.7,
+    send: 0.08,
     low: true,
     build(v) {
       const t = v.t;
+      const f = rand(175, 200);
       const g = v.gain(v.out);
-      const o = v.osc('sine', 300, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
-      glide(o.frequency, t, 300, 220, 0.07);
+      const lp = v.filter('lowpass', 1100, 0.7, g);
+      const end = perc(g.gain, t, 0.004, 0.6, 0.32);
+      const o = v.osc('triangle', f, t, end, lp);
+      o.frequency.setValueAtTime(f * 0.8, t);
+      o.frequency.exponentialRampToValueAtTime(f * 1.7, t + 0.045);
+      o.frequency.exponentialRampToValueAtTime(f * 0.95, t + 0.3);
+      // The wobble that makes it rubber: a fast vibrato that dies away.
+      const depth = v.gain(o.frequency, 0);
+      perc(depth.gain, t + 0.04, 0.01, f * 0.14, 0.26);
+      v.osc('sine', 24, t, end, depth);
+      // A squish of noise on the contact.
+      const sg = v.gain(v.out);
+      const sbp = v.filter('bandpass', 650, 1.2, sg);
+      v.noise(t, perc(sg.gain, t, 0.001, 0.14, 0.035), sbp);
     },
   },
 

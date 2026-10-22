@@ -46,7 +46,7 @@ const RULES: { ill: Illustration; title: string; text: string }[] = [
 const CRUMB_RULE: { ill: Illustration; title: string; text: string } = {
   ill: 'crumbs',
   title: 'Follow the crumb trails',
-  text: `Each sugar crumb is +${CRUMB_POINTS} (times your multiplier) and adds ${CRUMB_COMBO_BONUS} s to a running chain. Take a whole trail for a Perfect trail bonus of +${TRAIL_BONUS}. Trails are optional, but they love to lead you somewhere risky.`,
+  text: `Each crumb pays +${CRUMB_POINTS} (times your multiplier) and adds ${CRUMB_COMBO_BONUS} s to a running chain. Take a whole trail for a +${TRAIL_BONUS} Perfect trail bonus. Optional, but trails love to lead you somewhere risky.`,
 };
 
 const DAILY_RULE: { ill: Illustration; title: string; text: string } = {

@@ -224,19 +224,19 @@ export class Weather {
     for (let k = k0; k <= k1; k++) {
       const wm = look.weightAt('marsh', k * MIST_SLOT);
       if (wm <= 0) continue;
-      for (let j = 0; j < 2; j++) {
-        const h = hash(seed ^ 0x3157, k, j);
-        if (h > 0.85 * wm) continue;
-        const y = g.yOfD(k * MIST_SLOT + hash(seed ^ 0x3158, k, j) * MIST_SLOT);
-        if (y < -90 || y > g.viewH + 90) continue;
-        const l = g.leftAt(y);
-        const r = g.rightAt(y);
-        const ph = hash(seed ^ 0x3159, k, j) * TAU;
-        const x = l + (r - l) * hash(seed ^ 0x315a, k, j) + (g.reduced ? 0 : Math.sin(g.t * 0.08 + ph) * 26);
-        const breathe = g.reduced ? 0.8 : 0.75 + 0.25 * Math.sin(g.t * 0.2 + ph * 1.7);
-        ctx.globalAlpha = (0.2 + 0.2 * hash(seed ^ 0x315b, k, j)) * breathe * wm;
-        g.sprite(mist, x, y, 0, 1.5 + 1.3 * hash(seed ^ 0x315c, k, j));
-      }
+      // One puff per slot: they are big, soft and translucent, so each one costs a
+      // lot of overdraw for very little extra haze.
+      const h = hash(seed ^ 0x3157, k);
+      if (h > 0.9 * wm) continue;
+      const y = g.yOfD(k * MIST_SLOT + hash(seed ^ 0x3158, k) * MIST_SLOT);
+      if (y < -90 || y > g.viewH + 90) continue;
+      const l = g.leftAt(y);
+      const r = g.rightAt(y);
+      const ph = hash(seed ^ 0x3159, k) * TAU;
+      const x = l + (r - l) * hash(seed ^ 0x315a, k) + (g.reduced ? 0 : Math.sin(g.t * 0.08 + ph) * 26);
+      const breathe = g.reduced ? 0.8 : 0.75 + 0.25 * Math.sin(g.t * 0.2 + ph * 1.7);
+      ctx.globalAlpha = (0.26 + 0.22 * hash(seed ^ 0x315b, k)) * breathe * wm;
+      g.sprite(mist, x, y, 0, 1.4 + 1.2 * hash(seed ^ 0x315c, k));
     }
     ctx.globalAlpha = 1;
   }

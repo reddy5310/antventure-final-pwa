@@ -410,7 +410,8 @@ export class Hud {
       }
     }
     // Expired (or a new run): hide what is no longer in the list.
-    for (const sl of this.slots) {
+    for (let k = 0; k < this.slots.length; k++) {
+      const sl = this.slots[k];
       if (!sl.on) continue;
       let still = false;
       for (let i = 0; i < list.length; i++) if (list[i].kind === sl.kind) still = true;

@@ -16,7 +16,7 @@ import { ANT_HIT_R } from '../config';
 import type { World } from '../types';
 import { applyHit } from './damage';
 import { PHASE_MODS } from './difficulty';
-import { batchIsEscapable, fairReach } from './fairness';
+import { batchIsEscapable, expectedTravel, fairReach } from './fairness';
 import { insideLeaf } from './collision';
 import { riverEdgesInto, type RiverEdges } from './river';
 import { registerNearMiss } from './scoring';
@@ -60,7 +60,7 @@ const edges: RiverEdges = { left: 0, right: 0 };
  * is fixed in river distance.
  */
 function edgesAtLanding(world: World, fall: number, dy = 0): RiverEdges {
-  return riverEdgesInto(world.seed, world.distance + world.scrollSpeed * fall - dy, edges);
+  return riverEdgesInto(world.seed, world.distance + expectedTravel(world, fall) - dy, edges);
 }
 
 /** Keeps a landing point on the water. */
@@ -71,14 +71,14 @@ function onWater(world: World, x: number, dy: number, fall: number): number {
 
 function commitBatch(world: World, batch: DropBatch, fall: number, aimed: boolean): void {
   const p = world.player;
-  const v = world.scrollSpeed;
   for (let i = 0; i < batch.n; i++) {
     const f = fall + batch.delay[i];
     world.drops.push({
       id: world.nextId++,
       x: batch.x[i],
-      // Starts upstream so that, scrolling with the river, it lands on the row.
-      y: p.y + batch.dy[i] - v * f,
+      // Starts upstream so that, scrolling with the river (at the speed of
+      // every zone on the way, a blend included), it lands on the row.
+      y: p.y + batch.dy[i] - expectedTravel(world, f),
       age: 0,
       fall: f,
       r: batch.r[i],

@@ -27,7 +27,7 @@ import type {
 import { focusEl, focusables, h } from './dom';
 import type { UIEnv } from './env';
 import { Banners, Countdown, PickupHint, Pills, Toasts, Tutorial } from './feedback';
-import { fmtInt, fmtMeters } from './format';
+import { fmtMeters } from './format';
 import { Hud } from './hud';
 import { Modals } from './modal';
 import { buildHelp } from './modals/help';
@@ -219,7 +219,8 @@ export class UI {
         break;
       }
       case 'trail-complete':
-        this.pills.show('trail', 'Perfect trail!', 'sparkle', `+${fmtInt(e.points)}`);
+        // The canvas already floats the bonus at the leaf: the pill only confirms (and is what screen readers get).
+        this.pills.show('trail', 'Perfect trail!', 'sparkle');
         break;
       case 'shield-block':
         this.pills.show('block', 'Blocked!', 'mushroom');

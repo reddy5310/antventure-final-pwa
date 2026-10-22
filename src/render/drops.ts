@@ -25,7 +25,6 @@ const STREAK_HEIGHT = 150;
 /** How far outside r the closing ring starts (multiple of r). */
 const RING_START = 1.25;
 
-
 /** `drops` defaults to the world's; the menu backdrop passes its cosmetic demo drops. */
 export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.drops): void {
   if (!drops.length) return;

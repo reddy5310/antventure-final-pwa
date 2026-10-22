@@ -499,6 +499,8 @@ startLoop({
     renderer.render(world, frameDt, veil);
     if (scene === 'run' || scene === 'paused') ui.updateHUD(world, fps);
     audio.setIntensity(world.state === 'attract' ? 0.15 : world.intensity);
+    // Night closes the music in a little; the title screen's attract river stays bright.
+    audio.setDarkness(world.state === 'attract' ? 0 : world.darkness);
   },
 });
 

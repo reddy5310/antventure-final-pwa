@@ -309,6 +309,7 @@ export class GameOverScreen {
   private announcement(): string {
     const { summary, isBest, rank } = this.info;
     let text = `${this.title()} Final score ${fmtInt(summary.score)} points, ${fmtMeters(summary.distanceM)}.`;
+    if (summary.crumbs > 0) text += ` ${plural(summary.crumbs, 'crumb')} collected.`;
     if (isBest) text += ' New best!';
     else if (rank) text += ` Number ${rank} on your board.`;
     return text;

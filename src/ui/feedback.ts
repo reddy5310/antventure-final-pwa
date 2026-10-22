@@ -202,7 +202,8 @@ export class PickupHint {
 
   /** Called every frame while running: cheap, allocation-free. */
   scan(w: World): void {
-    if (this.unseen === 0 || w.state !== 'running') return;
+    // One hint at a time: a second kind in view waits for the first to finish rather than replacing it.
+    if (this.unseen === 0 || w.state !== 'running' || !this.el.hidden) return;
     const list = w.pickups;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
