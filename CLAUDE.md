@@ -79,5 +79,7 @@ the bottom. River distance at view y is `world.distance + (player.y - y)`.
   and an "As shipped" section with measured balance are in
   `docs/phase-2/PLAN.md`. Phase 3 (streak, daily missions, crumb shop with
   skins, achievements) is planned in `docs/phase-3/PLAN.md`; later phases are
-  in `docs/ROADMAP.md`. Implement only your issue's scope, and list anything
+  in `docs/ROADMAP.md`. Rain warnings and rocks must never look alike: rain
+  is pale, dashed and has a 💧; rocks are warm, solid and have a V wake (see
+  `docs/hazards/PLAN.md`). Implement only your issue's scope, and list anything
   deferred in the PR description.

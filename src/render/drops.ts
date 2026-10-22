@@ -118,10 +118,13 @@ export function drawDrops(g: Gfx, world: World, drops: readonly Drop[] = world.d
     ctx.lineDashOffset = 0;
 
     // Teardrop in the centre, gone for the last moment when the real drop streaks in.
-    const tearA = fade * clamp01(remaining / TEAR_FADE);
+    // It also fades where the ant is under it: the ant is what the player must see inside a circle.
+    const hh = d.r * (0.32 + 0.22 * t);
+    const antGap = Math.hypot(ant.x - d.x, ant.y - d.y) - hh;
+    const tearA = fade * clamp01(remaining / TEAR_FADE) * (0.25 + 0.75 * clamp01(antGap / (ANT_HIT_R * 2)));
     if (tearA > 0.01) {
       ctx.globalAlpha = tearA;
-      teardrop(ctx, d.x, d.y, d.r * (0.32 + 0.22 * t));
+      teardrop(ctx, d.x, d.y, hh);
     }
   }
 

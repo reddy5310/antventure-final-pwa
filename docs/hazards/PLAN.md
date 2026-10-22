@@ -1,6 +1,6 @@
 # Hazard readability pack: rain vs rocks
 
-**Status:** in progress.
+**Status:** ✅ shipped (see "As shipped" at the end).
 
 ## The problem (from family playtests)
 
@@ -109,3 +109,36 @@ says changes.
 - Three Sonnet agents built in parallel on separate files: rain, rocks, and
   teach and feedback.
 - Validation: `npm run check`, e2e once, before/after phone screenshots.
+
+## As shipped
+
+- **Gameplay unchanged.** `src/game/**`, `src/types.ts` and `src/config.ts`
+  are untouched, so the Daily River, hitboxes and scores are identical.
+- **Rain:** a pale fill, a turning dashed rim fitted to the circle (no seam),
+  and a 💧 that grows with the timer.
+  - The 💧 also fades where the ant is under it, so the ant stays visible
+    inside a circle.
+  - Night: the glowing rim and the halos are kept. Checked with a forced-dark
+    screenshot.
+- **Rocks:**
+  - Sprites: warm stone, a side face, a cast shadow and a lit shoulder. They
+    are rendered 3 R0 wide, with the light kept upper left even when a rock is
+    turned.
+  - Water: a crescent bow wave, a V wake of three nested strokes, and a narrow
+    lee shade. There is no full ring and no round dark eddy.
+- **Hints:**
+  - `seen:rock` and `seen:rain` in `PickupHint`.
+  - `arm()` runs on every run start and resume.
+  - Hints wait while the tutorial card is up.
+- **How to play:** a new "Rain or rock?" card, and redrawn rain and rock
+  pictures.
+- **Wording:** the game over tip and the share card art also use the rain
+  circle now.
+- **Hit words:** "Splash!", "Bonk!" and "Snap!" come from a 4-slot pool. They
+  rise, or just fade with reduced motion.
+- **Validation:**
+  - `npm run check` passes (216 unit tests).
+  - e2e: 53 passed, plus the 7 usual skips that run on one project only.
+  - Phone screenshots by day and night, plus the hint and the help modal.
+- **Budget:** 3 Sonnet builders, about 360k tokens in total. The orchestrator
+  reviewed and fixed the rest.
