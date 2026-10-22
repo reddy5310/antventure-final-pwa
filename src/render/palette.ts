@@ -51,11 +51,13 @@ export const P = {
   lilyDark: '#2a6a3a',
   lilyLight: '#6cb862',
 
-  // Rocks.
-  rockDark: '#38434c',
-  rock: '#5f6c76',
-  rockLight: '#8e9ca6',
-  rockTop: '#bccad1',
+  // Rocks: warm river stone. Rain is cool and light (blue-white), rocks are warm
+  // and earthy, so the two never read as the same round thing (hazard pack).
+  rockDark: '#3a2f28',
+  rockSide: '#55463b',
+  rock: '#7c6957',
+  rockLight: '#a8927a',
+  rockTop: '#d8c8aa',
   moss: '#5c9a48',
   mossLight: '#86c066',
 
@@ -79,8 +81,11 @@ export const P = {
   antMid: '#7e3523',
   antHighlight: '#cf6643',
 
-  // Drop telegraphs.
+  // Drop telegraphs: a light "rain circle" (pale blue fill, dashed rim, a
+  // teardrop in the middle) plus the closing ring, never a dark solid disc.
   shadow: '#03101a',
+  rainFill: '#9fe0ff',
+  rainRim: '#d2f3ff',
   ringLight: '#f6fcff',
   ringDark: '#020d15',
   dropBody: '#d8f1ff',
