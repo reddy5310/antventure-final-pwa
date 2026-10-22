@@ -35,8 +35,8 @@ export const ZONE_INFO: Readonly<Record<ZoneId, ZoneInfo>> = {
   rapids: {
     name: ZONES.rapids.name,
     icon: 'zoneRapids',
-    sub: 'Fast, narrow, more rocks',
-    rule: 'Faster and narrower with more rocks, but metres (and points) come quicker.',
+    sub: `Fast, narrow, more rocks. Points ×${ZONES.rapids.pay}`,
+    rule: `Faster and narrower with more rocks, but everything you score here counts ×${ZONES.rapids.pay}.`,
   },
   night: {
     name: ZONES.night.name,
@@ -82,6 +82,13 @@ export const PICKUP_INFO: Readonly<Record<Exclude<PickupKind, 'crumb'>, PickupIn
     effect: 'easier near-misses, wider light',
     help: `For ${POWER_SECONDS.firefly} s the near-miss zone grows by half and the night light widens.`,
   },
+};
+
+/** Lily pads get a first-sight hint like the power-ups: they look solid, and nothing else says they are not. */
+export const PAD_INFO: Readonly<Pick<PickupInfo, 'name' | 'icon' | 'effect'>> = {
+  name: 'Lily pads',
+  icon: 'zoneMarsh',
+  effect: 'soft: they push, never hurt',
 };
 
 export const POWER_NAME: Readonly<Record<PowerKind, string>> = {

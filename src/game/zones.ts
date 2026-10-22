@@ -2,8 +2,10 @@
 // shape, so the Daily River has the same zones for everyone and the renderer
 // can ask what zone any row of the screen is in. 0–FIRST_ZONE_M is always
 // Jungle; after that, seeded segments are drawn from a shuffled bag of all
-// zones with no zone repeating back to back. Each boundary blends over
-// BLEND_M at the start of the new segment.
+// zones with no zone repeating back to back, and the first stretch after the
+// opener is a gentle one (never the Rapids: a new player is at their most
+// fragile there). Each boundary blends over BLEND_M at the start of the new
+// segment.
 
 import { UNITS_PER_METER } from '../config';
 import { createRng, type Rng } from '../engine/rng';
@@ -24,6 +26,12 @@ export interface ZoneDef {
   crumbs: number;
   /** Power-up frequency multiplier. */
   powers: number;
+  /**
+   * Points multiplier on everything the run earns here (distance, near-misses,
+   * crumbs), on top of the chain multiplier. Zones that are harder per second
+   * pay more, so risk is never the worse deal.
+   */
+  pay: number;
   /** 0 daylight .. 1 full night. */
   darkness: number;
   /** Rocks become lily pads (soft bumpers). */
@@ -31,10 +39,10 @@ export interface ZoneDef {
 }
 
 export const ZONES: Readonly<Record<ZoneId, Readonly<ZoneDef>>> = {
-  jungle: { id: 'jungle', name: 'Jungle', width: 1, scroll: 1, rain: 1, rocks: 1, crumbs: 1, powers: 1, darkness: 0, pads: false },
-  marsh: { id: 'marsh', name: 'Lily Marsh', width: 1.15, scroll: 0.9, rain: 0.85, rocks: 1, crumbs: 1.6, powers: 1, darkness: 0, pads: true },
-  rapids: { id: 'rapids', name: 'Rapids', width: 0.85, scroll: 1.3, rain: 0.75, rocks: 1.4, crumbs: 1, powers: 1.3, darkness: 0, pads: false },
-  night: { id: 'night', name: 'Night River', width: 1, scroll: 1, rain: 0.9, rocks: 1, crumbs: 1, powers: 1, darkness: 1, pads: false },
+  jungle: { id: 'jungle', name: 'Jungle', width: 1, scroll: 1, rain: 1, rocks: 1, crumbs: 1, powers: 1, pay: 1, darkness: 0, pads: false },
+  marsh: { id: 'marsh', name: 'Lily Marsh', width: 1.15, scroll: 0.9, rain: 0.85, rocks: 1, crumbs: 1.6, powers: 1, pay: 1, darkness: 0, pads: true },
+  rapids: { id: 'rapids', name: 'Rapids', width: 0.85, scroll: 1.3, rain: 0.9, rocks: 1.25, crumbs: 1, powers: 1.3, pay: 1.4, darkness: 0, pads: false },
+  night: { id: 'night', name: 'Night River', width: 1, scroll: 1, rain: 1.1, rocks: 1, crumbs: 1, powers: 1, pay: 1, darkness: 1, pads: false },
 };
 
 const BAG: readonly ZoneId[] = ['jungle', 'marsh', 'rapids', 'night'];
@@ -58,6 +66,8 @@ export interface ZoneMods {
   rocks: number;
   crumbs: number;
   powers: number;
+  /** Points multiplier (switches at the blend midpoint, so the HUD can show one settled number). */
+  pay: number;
   darkness: number;
   /** Rocks laid out here become lily pads (switches at the blend midpoint). */
   pads: boolean;
@@ -96,12 +106,23 @@ function timeline(seed: number): Timeline {
   return t;
 }
 
+/** Zones that may follow the opening Jungle: the hard, fast one waits until the player has found their feet. */
+const FIRST_DRAW: readonly ZoneId[] = ['marsh', 'night'];
+
 function nextFromBag(t: Timeline): ZoneId {
   if (t.bag.length === 0) {
     const bag = BAG.slice();
     for (let i = bag.length - 1; i > 0; i--) {
       const j = Math.floor(t.rng.next() * (i + 1));
       [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+    // The bag is drawn from the end. The first draw after the opener comes from
+    // FIRST_DRAW (this also rules out a Jungle repeat); no RNG is used, so the
+    // shuffle, and every later segment length, is the same as without the rule.
+    if (t.zones.length === 1) {
+      let k = bag.length - 1;
+      while (k > 0 && !FIRST_DRAW.includes(bag[k])) k--;
+      [bag[bag.length - 1], bag[k]] = [bag[k], bag[bag.length - 1]];
     }
     // No back-to-back repeat across bag boundaries.
     const prev = t.zones[t.zones.length - 1];
@@ -158,7 +179,7 @@ export function createZoneSample(): ZoneSample {
 }
 
 export function createZoneMods(): ZoneMods {
-  return { width: 1, scroll: 1, rain: 1, rocks: 1, crumbs: 1, powers: 1, darkness: 0, pads: false };
+  return { width: 1, scroll: 1, rain: 1, rocks: 1, crumbs: 1, powers: 1, pay: 1, darkness: 0, pads: false };
 }
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -174,6 +195,7 @@ export function modsFor(s: ZoneSample, out: ZoneMods): ZoneMods {
   out.rocks = lerp(a.rocks, b.rocks, k);
   out.crumbs = lerp(a.crumbs, b.crumbs, k);
   out.powers = lerp(a.powers, b.powers, k);
+  out.pay = k < 0.5 ? a.pay : b.pay;
   out.darkness = lerp(a.darkness, b.darkness, k);
   out.pads = k < 0.5 ? a.pads : b.pads;
   return out;
@@ -188,15 +210,18 @@ export function zoneModsAt(seed: number, d: number, out: ZoneMods): ZoneMods {
 
 interface Tracker {
   index: number;
+  /** Bit per zone entered alive (ZONE_BIT); the opening Jungle counts from the start. */
+  seen: number;
   mods: ZoneMods;
   sample: ZoneSample;
 }
+const ZONE_BIT: Readonly<Record<ZoneId, number>> = { jungle: 1, marsh: 2, rapids: 4, night: 8 };
 const trackers = new WeakMap<World, Tracker>();
 
 function tracker(world: World): Tracker {
   let t = trackers.get(world);
   if (!t) {
-    t = { index: 0, mods: createZoneMods(), sample: createZoneSample() };
+    t = { index: 0, seen: ZONE_BIT.jungle, mods: createZoneMods(), sample: createZoneSample() };
     trackers.set(world, t);
   }
   return t;
@@ -207,10 +232,16 @@ export function currentZoneMods(world: World): Readonly<ZoneMods> {
   return tracker(world).mods;
 }
 
+function popcount4(v: number): number {
+  return (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1) + ((v >> 3) & 1);
+}
+
 /**
- * Updates world.zone / nextZone / zoneBlend / darkness / zonesReached for the
- * leaf's river distance and emits 'zone' when a new segment begins (live runs
- * only — the menu backdrop stays silent).
+ * Updates world.zone / nextZone / zoneBlend / darkness for the leaf's river
+ * distance and, when a new segment begins, emits 'zone' and counts the zone
+ * (live runs only — the menu backdrop stays silent, and the river drifting on
+ * under a fallen leaf reaches nothing). zonesReached counts different zones,
+ * so a long run that meets the Jungle twice does not report five of four.
  */
 export function trackZone(world: World): void {
   const t = tracker(world);
@@ -222,7 +253,10 @@ export function trackZone(world: World): void {
   world.darkness = t.mods.darkness;
   if (s.index > t.index) {
     t.index = s.index;
-    world.zonesReached += 1;
-    if (world.state === 'running') world.events.push({ type: 'zone', zone: s.next });
+    if (world.state === 'running') {
+      t.seen |= ZONE_BIT[s.next];
+      world.zonesReached = popcount4(t.seen);
+      world.events.push({ type: 'zone', zone: s.next });
+    }
   }
 }

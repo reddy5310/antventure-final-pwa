@@ -24,6 +24,7 @@ import { LEAF_HIT_R, SPAWN_AHEAD, UNITS_PER_METER } from '../config';
 import { createRng, type Rng } from '../engine/rng';
 import type { Pickup, PickupKind, World } from '../types';
 import { activatePower, hasPower, powerPoints } from './powers';
+import { payFactor } from './scoring';
 import { riverEdgesInto, type RiverEdges } from './river';
 import { simState } from './state';
 import { COMBO_TIME } from './tuning';
@@ -41,8 +42,13 @@ export const CRUMB_POINTS = 10;
 export const TRAIL_BONUS = 50;
 /** A crumb adds this many seconds to a running combo timer (capped at COMBO_TIME). */
 export const CRUMB_COMBO_BONUS = 0.4;
-/** Honey: crumbs this close to the leaf drift towards it... */
-export const MAGNET_RANGE = 110;
+/**
+ * Honey: crumbs this close to the leaf drift towards it... (A trail every
+ * ~80 m is one every ~15 s, so a magnet has to reach a lane or two to the side
+ * and last long enough to meet a trail: at 110 units / 9 s it paid ~+0.7
+ * crumbs, next to nothing.)
+ */
+export const MAGNET_RANGE = 160;
 /** ...at this speed (u/s, on top of the river's own motion). */
 export const MAGNET_SPEED = 260;
 /** The leaf takes a pickup whose centre is this close to the leaf centre. */
@@ -62,7 +68,7 @@ export const TRAIL_MAX = 9;
 const TRAIL_GAP_M = [55, 105] as const;
 /** The first trail comes early so a new player learns what crumbs are. */
 const FIRST_TRAIL_M = [18, 26] as const;
-/** Power-ups: 160-260 m apart (before the zone's power-up multiplier)... */
+/** Power-ups: 160-260 m apart (before the zone's power-up multiplier, counted along the way: see powerGapEnd)... */
 const POWER_GAP_M = [160, 260] as const;
 /** ...the first one after the stretch an idle player survives (median ~15 s = ~40 m). */
 const FIRST_POWER_M = [64, 110] as const;
@@ -89,6 +95,8 @@ const POWER_NUDGE = [0, 55, -55, 110, -110] as const;
  * tall screens, and shorter than the planned 160 m / 1.3 spacing.
  */
 const POWER_MIN_SEP = 5000;
+/** Step (units) of the walk that turns a power-up gap into river distance. */
+const GAP_STEP = 8 * U;
 /** Fewer than this many crumbs left after sliding out of obstacles: no trail. */
 const MIN_PLACED = 3;
 
@@ -109,7 +117,7 @@ type Shape = 'line' | 'arc' | 'zigzag' | 'dare';
 const POWER_KINDS = ['mushroom', 'honey', 'ladybug', 'firefly'] as const;
 type PowerPickup = (typeof POWER_KINDS)[number];
 /** Base odds. Ladybug is rarer (a full-heart ladybug is only points). */
-const POWER_WEIGHT: Readonly<Record<PowerPickup, number>> = { mushroom: 3, honey: 2.4, ladybug: 1.3, firefly: 1.1 };
+const POWER_WEIGHT: Readonly<Record<PowerPickup, number>> = { mushroom: 3, honey: 1.8, ladybug: 1.3, firefly: 1.4 };
 /** Fireflies get this much likelier when Night is here or coming within NIGHT_LOOKAHEAD_M. */
 const FIREFLY_NIGHT_BOOST = 3.5;
 const NIGHT_LOOKAHEAD_M = 100;
@@ -233,6 +241,16 @@ function sync(world: World, st: PickupState): void {
   if (dy === 0) return;
   st.playerY = y;
   for (const k of world.pickups) k.y += dy;
+}
+
+/**
+ * Re-anchors pickups right away when the leaf's row moves (a resize or a
+ * rotation). Obstacles and drops are shifted by setViewHeight itself; without
+ * this the pickups would wait for the next sim step, and while the game is
+ * paused or counting down they would sit off from the rocks they belong to.
+ */
+export function syncPickups(world: World): void {
+  sync(world, pickupState(world));
 }
 
 function findTrail(st: PickupState, id: number): Trail | null {
@@ -532,6 +550,27 @@ function powerSpotFree(st: PickupState, x: number, dist: number): boolean {
   return true;
 }
 
+/**
+ * River distance `gapM` metres of power-up "weather" after d0: every metre
+ * counts as the zone's power-up multiplier, so the Rapids (x1.3) really do
+ * hand out more. Reading the multiplier at d0 alone would charge the gap after
+ * the last power-up of a zone at that zone's rate, and a Rapids stretch of
+ * 150-220 m (shorter than a gap) would barely see its bonus. A pure function
+ * of the seed and distance, like every other layout decision.
+ */
+function powerGapEnd(seed: number, d0: number, gapM: number, mods: ZoneMods): number {
+  let need = gapM * U;
+  let d = d0;
+  while (need > 0) {
+    const density = Math.max(0.25, zoneModsAt(seed, d + GAP_STEP / 2, mods).powers);
+    const budget = density * GAP_STEP;
+    if (need <= budget) return d + need / density;
+    need -= budget;
+    d += GAP_STEP;
+  }
+  return d;
+}
+
 /** Lays out one power-up near river distance d0 and schedules the next. */
 function layoutPower(world: World, st: PickupState, d0: number): void {
   const rng = st.rng;
@@ -541,8 +580,7 @@ function layoutPower(world: World, st: PickupState, d0: number): void {
   const uVar = rng.next();
 
   const seed = world.seed;
-  const mods = zoneModsAt(seed, d0, st.mods);
-  st.nextPowerD = d0 + (lerp(POWER_GAP_M[0], POWER_GAP_M[1], uGap) * U) / Math.max(0.25, mods.powers);
+  st.nextPowerD = powerGapEnd(seed, d0, lerp(POWER_GAP_M[0], POWER_GAP_M[1], uGap), st.mods);
   const kind = pickPowerKind(seed, d0, uKind, st.sample);
 
   // Never two power-ups alive at once. Judged by distance, not by what is in
@@ -599,7 +637,7 @@ export function layoutPickups(world: World): void {
 function collectCrumb(world: World, st: PickupState, k: Item): void {
   k.taken = true;
   k.takenT = 0;
-  const points = Math.round(CRUMB_POINTS * world.multiplier);
+  const points = Math.round(CRUMB_POINTS * payFactor(world));
   world.score += points;
   world.crumbs++;
   // Routing through crumbs keeps a chain alive (never starts one).
@@ -615,7 +653,7 @@ function collectCrumb(world: World, st: PickupState, k: Item): void {
   }
   world.events.push({ type: 'pickup', kind: 'crumb', x: k.x, y: k.y, points, streak });
   if (tr && tr.taken >= tr.size) {
-    const bonus = Math.round(TRAIL_BONUS * world.multiplier);
+    const bonus = Math.round(TRAIL_BONUS * payFactor(world));
     world.score += bonus;
     world.events.push({ type: 'trail-complete', x: k.x, y: k.y, points: bonus });
   }

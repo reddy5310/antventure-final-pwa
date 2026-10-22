@@ -8,7 +8,7 @@ import type { Device, PickupKind, TutorialHint, World } from '../types';
 import { h, setChildren } from './dom';
 import { animate, type UIEnv } from './env';
 import { icon, type IconName } from './icons';
-import { PICKUP_INFO } from './pickupinfo';
+import { PAD_INFO, PICKUP_INFO } from './pickupinfo';
 import type { ToastOptions } from './ui';
 
 const OUT_MS = 200;
@@ -178,66 +178,97 @@ export class Pills {
 
 // ---------------------------------------------------------------------------
 
-/** The first time a power-up is ever on screen, say what it does (once, then never again). */
-const HINT_MS = 2600;
+/**
+ * The first time a power-up (or a lily pad) is ever on screen, say what it
+ * does (once, then never again). The pads need it most: they look like solid
+ * obstacles, and a player who steers around every one never finds out they
+ * are harmless.
+ */
+const HINT_S = 2.6;
 /** Visible = inside the top edge of the view (world units). */
 const HINT_TOP = 6;
 /** ...and not already past the leaf. */
 const HINT_BOTTOM = 120;
 
-const HINT_KINDS: readonly Exclude<PickupKind, 'crumb'>[] = ['mushroom', 'honey', 'ladybug', 'firefly'];
+type HintKind = Exclude<PickupKind, 'crumb'> | 'pad';
+const HINT_KINDS: readonly HintKind[] = ['mushroom', 'honey', 'ladybug', 'firefly', 'pad'];
 const kindBit = (k: PickupKind): number => (k === 'mushroom' ? 1 : k === 'honey' ? 2 : k === 'ladybug' ? 4 : k === 'firefly' ? 8 : 0);
-const flagOf = (k: PickupKind): string => `seen:${k}`;
+const PAD_BIT = 16;
+const flagOf = (k: HintKind): string => `seen:${k}`;
 
 export class PickupHint {
   readonly el: HTMLElement;
-  /** Bit per kind not yet introduced; 0 once all four are known (scan is then a single compare). */
+  /** Bit per kind not yet introduced; 0 once all are known (scan is then a single compare). */
   private unseen = 0;
-  private timer = 0;
+  /** Sim time (world.time) when the hint starts to fade, and when it is gone. Sim time, not a timer, so a paused game keeps the hint on hold. */
+  private fadeAt = 0;
+  private goneAt = 0;
+  private fading = false;
 
   constructor() {
     this.el = h('div', { class: 'pk-hint', hidden: true, role: 'status', 'aria-live': 'polite' });
-    for (const k of HINT_KINDS) if (!storage.getFlag(flagOf(k))) this.unseen |= kindBit(k);
+    for (const k of HINT_KINDS) if (!storage.getFlag(flagOf(k))) this.unseen |= k === 'pad' ? PAD_BIT : kindBit(k);
   }
 
   /** Called every frame while running: cheap, allocation-free. */
   scan(w: World): void {
+    if (!this.el.hidden) {
+      this.age(w.time);
+      return;
+    }
     // One hint at a time: a second kind in view waits for the first to finish rather than replacing it.
-    if (this.unseen === 0 || w.state !== 'running' || !this.el.hidden) return;
+    if (this.unseen === 0 || w.state !== 'running') return;
     const list = w.pickups;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      if (p.taken) continue;
+      if (p.taken || p.kind === 'crumb') continue;
       const bit = kindBit(p.kind);
       if (!(this.unseen & bit)) continue;
       if (p.y < HINT_TOP || p.y > w.viewH - HINT_BOTTOM) continue;
       this.unseen &= ~bit;
       storage.setFlag(flagOf(p.kind));
-      if (p.kind !== 'crumb') this.show(p.kind);
+      this.show(w.time, p.kind);
+      return;
+    }
+    if (!(this.unseen & PAD_BIT)) return;
+    const obs = w.obstacles;
+    for (let i = 0; i < obs.length; i++) {
+      const o = obs[i];
+      if (o.kind !== 'pad' || o.y < HINT_TOP || o.y > w.viewH - HINT_BOTTOM) continue;
+      this.unseen &= ~PAD_BIT;
+      storage.setFlag(flagOf('pad'));
+      this.show(w.time, 'pad');
       return;
     }
   }
 
   hide(): void {
-    window.clearTimeout(this.timer);
+    this.fading = false;
     this.el.hidden = true;
     this.el.classList.remove('is-out');
   }
 
-  private show(kind: Exclude<PickupKind, 'crumb'>): void {
-    const info = PICKUP_INFO[kind];
-    window.clearTimeout(this.timer);
+  private age(now: number): void {
+    if (!this.fading) {
+      if (now < this.fadeAt) return;
+      this.fading = true;
+      this.goneAt = now + OUT_MS / 1000;
+      this.el.classList.add('is-out');
+    } else if (now >= this.goneAt) {
+      this.hide();
+    }
+  }
+
+  private show(now: number, kind: HintKind): void {
+    const info = kind === 'pad' ? PAD_INFO : PICKUP_INFO[kind];
+    this.hide();
     setChildren(
       this.el,
       h('span', { class: 'pk-hint-icon', 'data-kind': kind }, icon(info.icon, 'icon')),
       h('span', { class: 'pk-hint-text' }, h('strong', null, info.name), ` \u2014 ${info.effect}`),
     );
-    this.el.classList.remove('is-out');
+    this.fadeAt = now + HINT_S;
     this.el.hidden = false;
-    this.timer = window.setTimeout(() => {
-      this.el.classList.add('is-out');
-      this.timer = window.setTimeout(() => this.hide(), OUT_MS);
-    }, HINT_MS);
   }
 }
 

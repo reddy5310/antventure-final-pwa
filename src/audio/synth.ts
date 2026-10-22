@@ -12,7 +12,8 @@ export interface SfxSpec {
   send: number;
   /** Dropped first when many voices are playing. */
   low?: boolean;
-  build(v: Voice, combo: number): void;
+  /** `combo` climbs the near-miss and crumb ladders; `variant` picks a voicing (the zone stinger's zone). */
+  build(v: Voice, combo: number, variant: number): void;
 }
 
 /** Near-miss chimes climb from A4 up the A major pentatonic... */
@@ -179,6 +180,33 @@ export function thunder(v: Voice, far: number): void {
     v.noise(t, perc(crack.gain, t, 0.003, 0.5 * (1 - far * 2), rand(0.25, 0.4)), sh, rand(0.7, 1));
   }
 }
+
+/** How the new-zone stinger sounds in each zone, in ZONE_ORDER (Jungle, Marsh, Rapids, Night). */
+interface Stinger {
+  /** The breath of air sweeps from..to (Hz) over `time` seconds, at gain `breath`. */
+  from: number;
+  to: number;
+  time: number;
+  breath: number;
+  /** Open chord (MIDI) under it, through a lowpass at `lowpass` Hz. */
+  chord: readonly number[];
+  lowpass: number;
+  /** Three bells (MIDI): the first after `first` s, then every `gap` s. */
+  bells: readonly number[];
+  first: number;
+  gap: number;
+}
+
+const STINGERS: readonly Stinger[] = [
+  // Jungle: the neutral original.
+  { from: 350, to: 2600, time: 0.7, breath: 0.2, chord: [57, 64, 71], lowpass: 1400, bells: [76, 83, 88], first: 0.3, gap: 0.12 },
+  // Marsh: bright and watery, bells dripping close together up high.
+  { from: 500, to: 3200, time: 0.55, breath: 0.12, chord: [60, 67, 72], lowpass: 1800, bells: [79, 84, 91], first: 0.22, gap: 0.09 },
+  // Rapids: a hard, fast rush under open fifths, bells tumbling over each other.
+  { from: 300, to: 4200, time: 0.45, breath: 0.32, chord: [52, 59, 66], lowpass: 1600, bells: [76, 81, 88], first: 0.16, gap: 0.07 },
+  // Night: low and hushed, a few lone bells far apart like fireflies.
+  { from: 220, to: 1100, time: 0.9, breath: 0.1, chord: [48, 55, 62], lowpass: 900, bells: [83, 90, 95], first: 0.42, gap: 0.2 },
+];
 
 export const SFX: Record<Sfx, SfxSpec> = {
   splash: {
@@ -453,20 +481,22 @@ export const SFX: Record<Sfx, SfxSpec> = {
     },
   },
 
-  // New zone: a breath of air, a soft open chord and three rising bells. Neutral
-  // on purpose: it has to suit a sunny marsh as well as the night river.
+  // New zone: a breath of air, a soft open chord and three rising bells, voiced
+  // per zone (STINGERS) so the ear says where the river is going before the
+  // banner is read.
   zone: {
     level: 0.8,
     send: 0.5,
-    build(v) {
+    build(v, _combo, variant) {
+      const z = STINGERS[Math.round(variant)] ?? STINGERS[0];
       const t = v.t;
       const g = v.gain(v.out);
-      const bp = v.filter('bandpass', 350, 0.9, g);
-      glide(bp.frequency, t, 350, 2600, 0.7);
-      v.noise(t, swell(g.gain, t, 0.35, 0.2, 0.05, 0.6), bp);
-      const lp = v.filter('lowpass', 1400, 0.5, v.out);
-      for (const m of [57, 64, 71]) softNote(v, t + 0.04, midiToHz(m), 0.1, 0.3, 0.35, 0.8, lp);
-      [76, 83, 88].forEach((m, i) => bell(v, t + 0.3 + i * 0.12, midiToHz(m), 0.24, i === 2 ? 1.3 : 0.8));
+      const bp = v.filter('bandpass', z.from, 0.9, g);
+      glide(bp.frequency, t, z.from, z.to, z.time);
+      v.noise(t, swell(g.gain, t, 0.35 * (z.time / 0.7), z.breath, 0.05, 0.6), bp);
+      const lp = v.filter('lowpass', z.lowpass, 0.5, v.out);
+      for (const m of z.chord) softNote(v, t + 0.04, midiToHz(m), 0.1, 0.3, 0.35, 0.8, lp);
+      z.bells.forEach((m, i) => bell(v, t + z.first + i * z.gap, midiToHz(m), 0.24, i === 2 ? 1.3 : 0.8));
     },
   },
 

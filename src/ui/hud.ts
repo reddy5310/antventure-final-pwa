@@ -11,13 +11,14 @@
 import { MAX_HEARTS, UNITS_PER_METER } from '../config';
 // Shared with the canvas near-miss text so both heat up at the same chain lengths.
 import { comboTier } from '../render/palette';
-import type { ActivePower, GameEvent, PowerKind, World } from '../types';
+import { currentZoneMods } from '../game/zones';
+import type { ActivePower, GameEvent, PowerKind, World, ZoneId } from '../types';
 import { heartSvg } from './art';
 import { h } from './dom';
 import { animate, type UIEnv } from './env';
 import { fmtInt, fmtMeters, fmtMult } from './format';
 import { icon, svgFrom } from './icons';
-import { POWER_NAME } from './pickupinfo';
+import { POWER_NAME, ZONE_INFO } from './pickupinfo';
 
 /** Combo timer bar resolution: 200 steps is smoother than the eye needs. */
 const BAR_STEPS = 200;
@@ -111,6 +112,9 @@ export class Hud {
   private bestText = document.createTextNode('');
   private crumbsEl: HTMLElement;
   private crumbText = document.createTextNode('0');
+  private payEl: HTMLElement;
+  private payText = document.createTextNode('');
+  private payIcon: HTMLElement;
   private powersEl: HTMLElement;
   private slots: PowerSlot[] = [];
   private fpsEl: HTMLElement;
@@ -131,6 +135,8 @@ export class Hud {
   private best: BestState | '' = '';
   private bestNum = -1;
   private crumbs = -1;
+  private pay = -1;
+  private payZone: ZoneId | '' = '';
   private fps = -1;
   private showFps: boolean | null = null;
   private canPause: boolean | null = null;
@@ -153,11 +159,15 @@ export class Hud {
       icon('crumb', 'icon hud-chip-icon'),
       h('span', null, this.crumbText),
     );
+    // A zone that pays extra (the Rapids) says so for as long as you are in it.
+    this.payIcon = h('span', { class: 'hud-pay-icon' }, icon('zoneRapids', 'icon hud-chip-icon'));
+    this.payEl = h('div', { class: 'hud-chip hud-pay', hidden: true }, this.payIcon, h('span', null, this.payText));
     const chips = h(
       'div',
       { class: 'hud-chips' },
       h('div', { class: 'hud-chip hud-dist' }, icon('up', 'icon hud-chip-icon'), h('span', null, this.distText)),
       this.crumbsEl,
+      this.payEl,
       this.bestEl,
     );
 
@@ -215,6 +225,7 @@ export class Hud {
     this.best = '';
     this.bestNum = -1;
     this.crumbs = -1;
+    this.pay = -1;
     for (const sl of this.slots) this.hideSlot(sl);
     this.powersEl.hidden = true;
     this.fps = -1;
@@ -282,6 +293,7 @@ export class Hud {
       this.crumbs = w.crumbs;
       this.crumbText.data = fmtInt(w.crumbs);
     }
+    this.updatePay(w);
     this.updatePowers(w.powers);
 
     const canPause = w.state === 'running';
@@ -300,6 +312,26 @@ export class Hud {
       this.fpsText.data = `${fps} fps`;
       this.fpsEl.classList.toggle('is-low', fps < 50);
     }
+  }
+
+  /** The zone's points bonus (1 almost everywhere): shown only while it is not 1, under the crumb chip. */
+  private updatePay(w: World): void {
+    const pay = currentZoneMods(w).pay;
+    if (pay === this.pay) return;
+    this.pay = pay;
+    const on = pay !== 1;
+    this.payEl.hidden = !on;
+    if (!on) return;
+    // The bonus switches at the blend's midpoint, so that is also the zone that earns it.
+    const zone = w.zoneBlend < 0.5 ? w.zone : w.nextZone;
+    this.payText.data = fmtMult(pay);
+    if (zone !== this.payZone) {
+      this.payZone = zone;
+      this.payEl.dataset.zone = zone;
+      this.payEl.title = `${ZONE_INFO[zone].name}: everything you score counts ${fmtMult(pay)}`;
+      this.payIcon.replaceChildren(icon(ZONE_INFO[zone].icon, 'icon hud-chip-icon'));
+    }
+    animate(this.env, this.payEl, POP, POP_OPTS);
   }
 
   onEvent(e: GameEvent): void {

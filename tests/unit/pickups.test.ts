@@ -14,7 +14,7 @@ import {
   layoutPickups,
   updatePickups,
 } from '../../src/game/pickups';
-import { activatePower } from '../../src/game/powers';
+import { activatePower, POWER_SECONDS } from '../../src/game/powers';
 import { reachIn } from '../../src/game/player';
 import { riverEdgesAt } from '../../src/game/river';
 import { multiplierFor } from '../../src/game/scoring';
@@ -706,13 +706,13 @@ describe('collecting', () => {
     expect(w.crumbs).toBeGreaterThanOrEqual(crumbs.length - 4);
   });
 
-  it('applies the honey magnet: crumbs within 110 units drift in at 260 u/s, others do not', () => {
-    expect(MAGNET_RANGE).toBe(110);
+  it('applies the honey magnet: crumbs within 160 units drift in at 260 u/s, others do not', () => {
+    expect(MAGNET_RANGE).toBe(160);
     expect(MAGNET_SPEED).toBe(260);
     const w = newRun();
     activatePower(w, 'honey');
     const inside = put(w, 'crumb', 100, -40);
-    const outside = put(w, 'crumb', 140, -40);
+    const outside = put(w, 'crumb', 190, -40);
     const power = put(w, 'mushroom', 60, -40);
     const x0 = inside.x;
     const outsideX0 = outside.x;
@@ -739,7 +739,7 @@ describe('collecting', () => {
     step(w, 10);
     expect(k.x).toBe(x0);
     activatePower(w, 'honey');
-    step(w, Math.round(9.1 / SIM_DT));
+    step(w, Math.round((POWER_SECONDS.honey + 0.1) / SIM_DT));
     const late = put(w, 'crumb', 100, -40);
     const lx = late.x;
     step(w, 10);
@@ -752,7 +752,7 @@ describe('collecting', () => {
       put(w, kind, 0);
       const events = step(w, 1);
       expect(events.find((e) => e.type === 'pickup')).toMatchObject({ kind, points: 0 });
-      expect(events).toContainEqual({ type: 'power-start', kind, duration: kind === 'mushroom' ? 10 : kind === 'honey' ? 9 : 12 });
+      expect(events).toContainEqual({ type: 'power-start', kind, duration: POWER_SECONDS[kind] });
       expect(w.powers.map((p) => p.kind)).toEqual([kind]);
       expect(w.crumbs).toBe(0);
     }
@@ -763,11 +763,11 @@ describe('collecting', () => {
     put(w, 'honey', 0);
     step(w, 1);
     step(w, Math.round(4 / SIM_DT));
-    expect(w.powers[0].left).toBeLessThan(5.1);
+    expect(w.powers[0].left).toBeLessThan(POWER_SECONDS.honey - 3.9);
     put(w, 'honey', 0);
     step(w, 1);
     expect(w.powers).toHaveLength(1);
-    expect(w.powers[0].left).toBeGreaterThan(8.9);
+    expect(w.powers[0].left).toBeGreaterThan(POWER_SECONDS.honey - 0.1);
   });
 
   it('ladybug: +1 heart below the maximum, otherwise 100 x multiplier points', () => {

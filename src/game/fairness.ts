@@ -134,8 +134,11 @@ function collectEvents(world: World, st: SimState, batch: DropBatch, fall: numbe
   const vv = Math.max(1, v);
   for (let i = 0; i < world.obstacles.length; i++) {
     const o = world.obstacles[i];
-    // Lily pads are soft bumpers: they never hurt, so they never wall off the row.
-    if (o.hit || o.kind === 'pad') continue;
+    // Lily pads count as walls too, though they never hurt: they shove the
+    // leaf aside (obstacles.ts padContact), so a resting spot inside a pad's
+    // reach is not a spot the leaf can keep, and a splash beside a pad must
+    // not rely on it. Only rocks and twigs that already hit are done.
+    if (o.hit) continue;
     const ry = obstacleRy(o);
     const toRow = p.y - o.y;
     // Quick reject for what cannot arrive within the window even at the fastest zone.

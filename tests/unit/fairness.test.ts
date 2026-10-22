@@ -97,8 +97,9 @@ describe('escapability check', () => {
     expect(batchIsEscapable(w, st, b, 0.9, x0)).toBe(false);
   });
 
-  it('does not treat a lily pad as a wall: it only nudges, so it never makes a spawn unfair', () => {
-    // The scene of the rock test above, with the rock swapped for a pad of the same size.
+  it('treats a lily pad as a wall too: it never hurts, but it shoves the leaf, so a spot inside its reach is not one the leaf can keep', () => {
+    // The scene of the rock test above, with the rock swapped for a pad of the same size. The pad
+    // would carry a resting leaf out of its reach, often into the very splash the spawn counted on.
     const place = (kind: Obstacle['kind']) => {
       const w = calmWorld(10);
       const st = simState(w);
@@ -110,7 +111,7 @@ describe('escapability check', () => {
       return batchIsEscapable(w, st, b, 0.9, x0);
     };
     expect(place('rock')).toBe(false);
-    expect(place('pad')).toBe(true);
+    expect(place('pad')).toBe(false);
   });
 
   it('splash half-widths follow the hit circle', () => {

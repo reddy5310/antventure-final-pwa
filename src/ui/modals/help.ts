@@ -104,7 +104,7 @@ export function buildHelp(env: UIEnv, close: () => void): { body: HTMLElement; f
     'section',
     { class: 'help-card help-list-card' },
     h('h3', { class: 'help-title' }, icon('sparkle', 'icon help-title-icon'), 'Power-up bubbles'),
-    h('p', { class: 'help-text' }, 'Rare bubbles drift down the river. Touch one to use it; none are ever required.'),
+    h('p', { class: 'help-text' }, 'Rare bubbles drift down the river. Steer the leaf over one to collect it; none are ever required.'),
     h(
       'ul',
       { class: 'help-list' },
@@ -123,7 +123,7 @@ export function buildHelp(env: UIEnv, close: () => void): { body: HTMLElement; f
     'section',
     { class: 'help-card help-list-card' },
     h('h3', { class: 'help-title' }, icon('zoneRapids', 'icon help-title-icon'), 'River zones'),
-    h('p', { class: 'help-text' }, 'The river changes as you go: expect a new zone roughly every minute.'),
+    h('p', { class: 'help-text' }, 'The river changes as you go: a new zone every 30 to 50 seconds or so.'),
     h(
       'ul',
       { class: 'help-list' },

@@ -19,6 +19,7 @@ import type { Obstacle, ObstacleKind, World } from '../types';
 import { closestOnObstacle, circleHitsObstacle, roundClearance } from './collision';
 import { applyHit } from './damage';
 import { createDifficulty, difficultyAt, scrollAtLevel, timeAtDistanceOnRiver } from './difficulty';
+import { dropHalfWidth } from './fairness';
 import { riverEdgesInto, type RiverEdges } from './river';
 import type { SimState } from './state';
 import {
@@ -52,9 +53,10 @@ const PAD_SPIN_MIN = 0.05;
 /**
  * A pad shoves the leaf sideways at most this fast (u/s). Well under the
  * keyboard's 420, so a player can always push through one: pads nudge, they
- * never wall.
+ * never wall. (At 150 a leaf that ignored the pads was carried into a third
+ * of its splashes: gentle matters more than fast here.)
  */
-export const PAD_PUSH_MAX = 150;
+export const PAD_PUSH_MAX = 105;
 /** The shove eases off as the leaf clears the pad (1/s of the overlap). */
 const PAD_PUSH_RATE = 9;
 /** Leaf-centre offset from a pad's middle inside which "away" is a coin toss: use the roomier side. */
@@ -65,6 +67,8 @@ export const PAD_BUMP_COOLDOWN = 0.3;
 const PAD_BUMP_MIN_OVERLAP = 2;
 /** Visual lurch of the leaf when shoved (rad at full push speed). */
 const PAD_TILT = 0.22;
+/** A pad does not shove the leaf towards a splash that lands within this many seconds. */
+const PAD_SPLASH_LOOK = 0.4;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -223,12 +227,34 @@ interface PadState {
 const padStates = new WeakMap<World, PadState>();
 
 /**
+ * Would a shove towards `dir` carry the leaf into a splash about to land? Only
+ * drops landing within PAD_SPLASH_LOOK on the leaf's row count, and only those
+ * the leaf could reach at full push speed before they land.
+ */
+function splashAhead(world: World, dir: number): boolean {
+  const p = world.player;
+  const drops = world.drops;
+  for (let i = 0; i < drops.length; i++) {
+    const d = drops[i];
+    const tau = d.fall - d.age;
+    if (tau < 0 || tau > PAD_SPLASH_LOOK) continue;
+    const h = dropHalfWidth(d.y + world.scrollSpeed * tau - p.y, d.r);
+    if (h <= 0) continue;
+    const ahead = (d.x - p.x) * dir;
+    if (ahead > 0 && ahead < h + PAD_PUSH_MAX * tau) return true;
+  }
+  return false;
+}
+
+/**
  * A pad under the leaf shoves it sideways, out along the contact normal. The
  * leaf only moves in x, so "out" is the sideways clearance the pad's circle
  * asks for at this height: it grows as the pad floats onto the row, which is
  * what makes the shove ease in. Never a teleport, never damage: the push is
  * capped well below the steering speed, and moves the steering target with
- * the leaf so the two do not fight.
+ * the leaf so the two do not fight. It also holds off while a splash is about
+ * to land in the way: the spawn check certified an escape route, not one that
+ * a pad drags the leaf off.
  */
 function padContact(world: World, o: Obstacle, dt: number): void {
   const p = world.player;
@@ -243,6 +269,7 @@ function padContact(world: World, o: Obstacle, dt: number): void {
   const hi = edges.right - BANK_MARGIN;
   // Away from the pad's middle; dead centre goes the roomier way.
   const dir = dx > PAD_DEADZONE ? 1 : dx < -PAD_DEADZONE ? -1 : hi - o.x >= o.x - lo ? 1 : -1;
+  if (splashAhead(world, dir)) return;
   const speed = Math.min(PAD_PUSH_MAX, need * PAD_PUSH_RATE);
   const x = clamp(p.x + dir * speed * dt, lo, hi);
   const moved = x - p.x;

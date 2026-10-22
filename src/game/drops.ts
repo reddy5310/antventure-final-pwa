@@ -356,11 +356,15 @@ export function spawnDrops(world: World, st: SimState, dt: number): void {
   if (st.holdDrops) return;
   const diff = st.diff;
   const mods = PHASE_MODS[world.storm];
+  // The zone's rain multiplier covers all of the rain: patterns are about 40 %
+  // of it, so they must follow it too or the Rapids' lighter rain is only
+  // half as light as the table says.
+  const zoneRain = currentZoneMods(world).rain;
 
   // Timers count in spawns, drained at the current rate, so a change of
   // storm phase or difficulty takes effect at once rather than after the
   // previously scheduled gap.
-  const rate = diff.dropRate * mods.rate * diff.grace * currentZoneMods(world).rain;
+  const rate = diff.dropRate * mods.rate * diff.grace * zoneRain;
   st.dropTimer -= dt * rate;
   if (st.dropTimer <= 0) spawnSingle(world, st);
 
@@ -370,7 +374,7 @@ export function spawnDrops(world: World, st: SimState, dt: number): void {
     // a beat later rather than the moment the storm picks up.
     if (st.patternTimer < PATTERN_LEAD_IN) st.patternTimer = PATTERN_LEAD_IN;
   } else {
-    st.patternTimer -= dt / interval;
+    st.patternTimer -= (dt * zoneRain) / interval;
     if (st.patternTimer <= 0) spawnPattern(world, st);
   }
   retryPattern(world, st, dt);

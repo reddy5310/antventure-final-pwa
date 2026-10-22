@@ -14,7 +14,7 @@ import { addDistanceScore, checkProgress, updateCombo } from './scoring';
 import { simState, type SimState } from './state';
 import { initStorm, updateStorm } from './storm';
 import { ATTRACT_SCROLL, DEATH_DURATION, DEATH_STOP_TIME, DRY_RATE, WET_FLOOR_PER_INTENSITY } from './tuning';
-import { layoutPickups, updatePickups } from './pickups';
+import { layoutPickups, syncPickups, updatePickups } from './pickups';
 import { updatePowers } from './powers';
 import { currentZoneMods, trackZone } from './zones';
 
@@ -196,6 +196,7 @@ export function setViewHeight(world: World, viewH: number): void {
   world.player.y += dy;
   for (const d of world.drops) d.y += dy;
   for (const o of world.obstacles) o.y += dy;
+  syncPickups(world);
 }
 
 /**

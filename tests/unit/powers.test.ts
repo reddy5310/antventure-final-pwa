@@ -92,7 +92,7 @@ describe('timed power-ups', () => {
       expect(p).toEqual({ kind, left: POWER_SECONDS[kind], total: POWER_SECONDS[kind] });
       expect(w.events).toEqual([{ type: 'power-start', kind, duration: POWER_SECONDS[kind] }]);
     }
-    expect(POWER_SECONDS).toEqual({ mushroom: 10, honey: 9, firefly: 12 });
+    expect(POWER_SECONDS).toEqual({ mushroom: 10, honey: 12, firefly: 12 });
     expect(w.powers).toHaveLength(3);
   });
 
@@ -100,7 +100,7 @@ describe('timed power-ups', () => {
     const w = newRun();
     activatePower(w, 'honey');
     w.events.length = 0;
-    const early = step(w, seconds(8.9));
+    const early = step(w, seconds(POWER_SECONDS.honey - 0.1));
     expect(hasPower(w, 'honey')).toBe(true);
     expect(types(early)).not.toContain('power-end');
     const late = step(w, seconds(0.3));
@@ -124,15 +124,15 @@ describe('timed power-ups', () => {
 
   it('different kinds run side by side, each with its own timer, in pickup order', () => {
     const w = newRun();
-    activatePower(w, 'honey');
-    step(w, seconds(1));
     activatePower(w, 'mushroom');
-    expect(w.powers.map((p) => p.kind)).toEqual(['honey', 'mushroom']);
-    const events = step(w, seconds(8.5));
-    // Honey (9 s) is over, the mushroom (10 s, started 1 s later) still has time.
-    expect(events).toContainEqual({ type: 'power-end', kind: 'honey' });
-    expect(w.powers.map((p) => p.kind)).toEqual(['mushroom']);
-    expect(w.powers[0].left).toBeCloseTo(10 - 8.5, 1);
+    step(w, seconds(1));
+    activatePower(w, 'honey');
+    expect(w.powers.map((p) => p.kind)).toEqual(['mushroom', 'honey']);
+    const events = step(w, seconds(10.5));
+    // The mushroom (10 s) is over, the honey (12 s, started 1 s later) still has time.
+    expect(events).toContainEqual({ type: 'power-end', kind: 'mushroom' });
+    expect(w.powers.map((p) => p.kind)).toEqual(['honey']);
+    expect(w.powers[0].left).toBeCloseTo(POWER_SECONDS.honey - 10.5, 1);
   });
 
   it('do not tick while updatePowers is not called (paused, dying)', () => {

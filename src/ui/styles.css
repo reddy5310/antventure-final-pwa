@@ -1211,6 +1211,17 @@ html[data-input='mouse'][data-screen='run'] #game {
   color: var(--pk-crumb);
 }
 
+/* A zone that pays extra (the Rapids): the bonus, for as long as it lasts. */
+.hud-pay {
+  color: var(--zone-rapids);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px rgba(207, 230, 255, 0.4);
+}
+
+.hud-pay-icon {
+  display: inline-flex;
+}
+
 /* Active power-ups: one icon with a radial timer each, in the right-hand column
    under the pause button (over the river bank, not over the river). */
 .hud-powers {
@@ -1471,6 +1482,19 @@ html[data-input='mouse'][data-screen='run'] #game {
 @media (max-width: 430px) {
   .banner-sub {
     display: none;
+  }
+}
+
+/* Very narrow phones: keep the pill clear of the power-up column on the right. */
+@media (max-width: 340px) {
+  .banner {
+    gap: 6px;
+    padding-right: 12px;
+  }
+
+  .banner-title {
+    font-size: 16px;
+    letter-spacing: 0;
   }
 }
 
@@ -1885,6 +1909,10 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .pk-hint-icon[data-kind='firefly'] {
   color: var(--pk-firefly);
+}
+
+.pk-hint-icon[data-kind='pad'] {
+  color: var(--zone-marsh);
 }
 
 .pk-hint-icon .icon {

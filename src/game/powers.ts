@@ -1,6 +1,6 @@
 // Timed power-up effects and the instant ladybug heal.
 //   mushroom  shield: absorbs exactly one hit (rain or obstacle), 10 s
-//   honey     magnet: crumbs drift to the leaf (applied in pickups.ts), 9 s
+//   honey     magnet: crumbs drift to the leaf (applied in pickups.ts), 12 s
 //   firefly   wider near-miss band (and, in the renderer, a wider light), 12 s
 //   ladybug   +1 heart, or points when the hearts are already full
 // Timers tick in sim steps (dt), never per frame. Picking up a kind that is
@@ -8,11 +8,12 @@
 
 import { MAX_HEARTS } from '../config';
 import type { ActivePower, HitSource, PickupKind, PowerKind, World } from '../types';
+import { payFactor } from './scoring';
 
 /** Seconds each timed power-up lasts. */
 export const POWER_SECONDS: Readonly<Record<PowerKind, number>> = {
   mushroom: 10,
-  honey: 9,
+  honey: 12,
   firefly: 12,
 };
 
@@ -20,7 +21,7 @@ export const POWER_SECONDS: Readonly<Record<PowerKind, number>> = {
 export const SHIELD_INVULN = 0.5;
 /** Near-miss band multiplier while a firefly is active. */
 export const FIREFLY_BAND = 1.5;
-/** A ladybug at full hearts pays this many points x multiplier. */
+/** A ladybug at full hearts pays this many points x multiplier (and zone pay). */
 export const LADYBUG_POINTS = 100;
 
 /** Is this timed power-up running right now? */
@@ -33,7 +34,7 @@ export function hasPower(world: World, kind: PowerKind): boolean {
 /** Points a pickup of this kind pays on collection right now (only a ladybug at full hearts pays). */
 export function powerPoints(world: World, kind: Exclude<PickupKind, 'crumb'>): number {
   if (kind !== 'ladybug' || world.player.hearts < MAX_HEARTS) return 0;
-  return Math.round(LADYBUG_POINTS * world.multiplier);
+  return Math.round(LADYBUG_POINTS * payFactor(world));
 }
 
 /** Applies a collected power-up pickup (starts/refreshes a timer or heals). */

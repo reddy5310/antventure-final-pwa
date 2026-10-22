@@ -5,12 +5,14 @@
 import { describe, expect, it } from 'vitest';
 import { LEAF_HIT_R, SIM_DT, SPAWN_AHEAD, UNITS_PER_METER, WORLD_W } from '../../src/config';
 import { timeAtDistance, timeAtDistanceOnRiver, difficultyAt, levelAt, scrollAtLevel } from '../../src/game/difficulty';
-import { spawnDemoDrop } from '../../src/game/drops';
+import { applyHit } from '../../src/game/damage';
+import { spawnDemoDrop, spawnDrops } from '../../src/game/drops';
 import { expectedTravel } from '../../src/game/fairness';
 import { layoutObstacles, maxTwigLen, PAD_BUMP_COOLDOWN, PAD_DENSITY, PAD_PUSH_MAX, PAD_R_MAX, PAD_R_MIN } from '../../src/game/obstacles';
 import { riverEdgesAt } from '../../src/game/river';
 import { simState } from '../../src/game/state';
 import { BANK_MARGIN, KEY_SPEED, OBSTACLE_PASS, TWIG_LEN_MAX } from '../../src/game/tuning';
+import { addDistanceScore, payFactor, registerNearMiss } from '../../src/game/scoring';
 import { createWorld, stepWorld, summarize } from '../../src/game/world';
 import {
   BLEND_M,
@@ -170,6 +172,18 @@ describe('zone timeline', () => {
         start = end;
       }
     }
+  });
+
+  it('never opens with the Rapids: the first stretch after the Jungle is Marsh or Night, whatever the seed', () => {
+    const first: Record<string, number> = {};
+    for (let seed = 1; seed <= 400; seed++) {
+      const z = segmentZone(seed, 1);
+      first[z] = (first[z] ?? 0) + 1;
+    }
+    expect(Object.keys(first).sort()).toEqual(['marsh', 'night']);
+    // Both still come up often, so the opening is not predictable.
+    expect(first.marsh).toBeGreaterThan(120);
+    expect(first.night).toBeGreaterThan(120);
   });
 
   it('shows all four zones within the first five segments (one full bag after the opening Jungle)', () => {
@@ -438,7 +452,7 @@ describe('obstacle layout per zone', () => {
     expect(avg(gaps.night)).toBeGreaterThan(jungle * 0.93);
     expect(avg(gaps.night)).toBeLessThan(jungle * 1.07);
     // Spacing divides by the zone's density; the river-crossing floor keeps it from reaching the full ratio late in the run.
-    expect(avg(gaps.rapids)).toBeLessThan(jungle / 1.25);
+    expect(avg(gaps.rapids)).toBeLessThan(jungle / (ZONES.rapids.rocks * 0.9));
     expect(avg(gaps.rapids)).toBeGreaterThan(jungle / ZONES.rapids.rocks - 0.05);
     expect(avg(gaps.marsh)).toBeLessThan(jungle / (PAD_DENSITY * 0.9));
   });
@@ -629,6 +643,202 @@ describe('lily pads', () => {
   });
 });
 
+describe('lily pads and the rain', () => {
+  const seed = 2026;
+  const marsh = firstSegmentOf(seed, 'marsh');
+
+  /** A splash landing on the leaf's row in `inS` seconds, `dx` units right of the leaf. */
+  function splashAt(w: World, dx: number, inS: number): { id: number; x: number; y: number; age: number; fall: number; r: number; aimed: boolean } {
+    const fall = 1;
+    return { id: w.nextId++, x: w.player.x + dx, y: w.player.y - w.scrollSpeed * inS, age: fall - inS, fall, r: 18, aimed: false };
+  }
+
+  /** How far (units, signed) a leaf resting inside a pad is carried in `steps` steps, with `drop` falling beside it. */
+  function carried(dropDx: number | null, steps: number): number {
+    const w = placeAt(seed, marsh.mid);
+    const p = w.player;
+    const x0 = p.x;
+    // A pad just right of the leaf, already on its row: the shove goes left.
+    pad(w, x0 + 6, p.y, 24);
+    const mine = dropDx === null ? null : splashAt(w, dropDx, 0.25);
+    for (let i = 0; i < steps; i++) {
+      w.drops.length = 0;
+      if (mine) w.drops.push(mine);
+      stepWorld(w, NONE, SIM_DT);
+      w.events.length = 0;
+    }
+    return p.x - x0;
+  }
+
+  it('shove a resting leaf out of their reach (the control for the next test)', () => {
+    expect(carried(null, 24)).toBeLessThan(-8);
+  });
+
+  it('hold their shove while a splash is about to land the way they would push, and shove again once it is clear', () => {
+    // A splash 40 units left of the leaf lands in a quarter of a second: pushing left would carry the leaf into it.
+    expect(Math.abs(carried(-40, 12))).toBeLessThan(0.5);
+    // It only lets go once the leaf could no longer get there in time, so the splash lands clear of the ant.
+    const w = placeAt(seed, marsh.mid);
+    const x0 = w.player.x;
+    pad(w, x0 + 6, w.player.y, 24);
+    const mine = splashAt(w, -40, 0.25);
+    for (let i = 0; i < 40; i++) {
+      w.drops.length = 0;
+      if (i < 30) w.drops.push(mine);
+      stepWorld(w, NONE, SIM_DT);
+      w.events.length = 0;
+    }
+    expect(w.hitsTaken).toBe(0);
+    // On the far side the shove carries the leaf away from the splash, so it carries on as usual.
+    expect(carried(+40, 24)).toBeLessThan(-8);
+    // A splash that is not about to land (beyond the look-ahead) does not stop it either.
+    const early = placeAt(seed, marsh.mid);
+    const ex0 = early.player.x;
+    pad(early, ex0 + 6, early.player.y, 24);
+    const late = splashAt(early, -40, 0.9);
+    for (let i = 0; i < 24; i++) {
+      early.drops.length = 0;
+      early.drops.push(late);
+      stepWorld(early, NONE, SIM_DT);
+      early.events.length = 0;
+    }
+    expect(early.player.x - ex0).toBeLessThan(-8);
+  });
+
+  it('do not carry a leaf that ignores them into splashes: no pile-up of hits just after a bump', () => {
+    // Earlier a pad dragged a leaf that had stopped caring about it into about a third of its splashes
+    // (14 % would be chance). A casual player, so there are plenty of splashes to count.
+    let hits = 0;
+    let afterBump = 0;
+    for (let seed2 = 1; seed2 <= 24; seed2++) {
+      const w = newRun(seed2);
+      w.player.hearts = 1e9;
+      const bot = createDodgeBot({ ignorePads: true, reaction: 0.35, margin: 2 });
+      let lastBump = -9;
+      while (w.time < 200) {
+        const inMarsh = (w.zoneBlend < 0.5 ? w.zone : w.nextZone) === 'marsh';
+        stepWorld(w, bot(w), SIM_DT);
+        for (const e of w.events) {
+          if (e.type === 'pad-bump') lastBump = w.time;
+          if (e.type === 'hit' && e.source === 'drop' && inMarsh) {
+            hits++;
+            if (w.time - lastBump < 0.7) afterBump++;
+          }
+        }
+        w.events.length = 0;
+      }
+    }
+    expect(hits).toBeGreaterThan(25);
+    expect(afterBump / hits).toBeLessThan(0.2);
+  });
+});
+
+describe('zone pay', () => {
+  const seed = 2026;
+
+  it('the Rapids pay more for everything, switching at the blend midpoint like the pads', () => {
+    expect(ZONES.rapids.pay).toBeGreaterThan(1);
+    for (const z of ZONE_IDS) if (z !== 'rapids') expect(ZONES[z].pay, z).toBe(1);
+    const rapids = firstSegmentOf(seed, 'rapids');
+    const before = placeAt(seed, rapids.start + 0.4 * BLEND_M * U);
+    const after = placeAt(seed, rapids.start + 0.6 * BLEND_M * U);
+    const jungle = placeAt(seed, 30 * U);
+    const settled = placeAt(seed, rapids.mid);
+    expect(payFactor(jungle)).toBe(1);
+    expect(payFactor(before)).toBe(1);
+    expect(payFactor(after)).toBe(ZONES.rapids.pay);
+    expect(payFactor(settled)).toBe(ZONES.rapids.pay);
+
+    // Distance, near-misses and the chain multiplier all go through it.
+    for (const [w, pay] of [[jungle, 1], [settled, ZONES.rapids.pay]] as const) {
+      w.score = 0;
+      addDistanceScore(w, U);
+      expect(w.score).toBeCloseTo(pay, 9);
+      w.score = 0;
+      registerNearMiss(w, 0, 0);
+      expect(w.score).toBe(Math.round(25 * pay));
+      // The second near-miss pays at the chain's x1.25 on top of the zone's pay.
+      const mult = w.multiplier;
+      w.score = 0;
+      registerNearMiss(w, 0, 0);
+      expect(w.score).toBe(Math.round(25 * mult * pay));
+    }
+  });
+
+  it('shows up in the events that carry points, so the floating text matches the score', () => {
+    const w = placeAt(seed, firstSegmentOf(seed, 'rapids').mid);
+    w.events.length = 0;
+    registerNearMiss(w, 10, 10);
+    const e = w.events.find((ev) => ev.type === 'near-miss');
+    expect(e && e.type === 'near-miss' ? e.points : 0).toBe(Math.round(25 * ZONES.rapids.pay));
+  });
+});
+
+describe('rain across zones', () => {
+  const seed = 2026;
+
+  /** What one second of a downpour takes off the pattern clock (patterns per interval) in `zone`. */
+  function patternPace(zone: ZoneId): number {
+    const w = placeAt(seed, firstSegmentOf(seed, zone).mid);
+    const st = simState(w);
+    w.storm = 'downpour';
+    difficultyAt(200, st.diff);
+    st.holdDrops = false;
+    st.dropTimer = 1e9;
+    st.patternTimer = 1000;
+    spawnDrops(w, st, 1);
+    return 1000 - st.patternTimer;
+  }
+
+  it("the zone's rain multiplier slows patterns as well as single drops", () => {
+    // Patterns are about 40 % of the rain: when only the singles followed the table, the Rapids' lighter rain was half as light.
+    const jungle = patternPace('jungle');
+    expect(jungle).toBeGreaterThan(0);
+    for (const z of ZONE_IDS) expect(patternPace(z) / jungle, z).toBeCloseTo(ZONES[z].rain, 9);
+  });
+});
+
+describe('zones reached', () => {
+  const seed = 2026;
+
+  it('only counts zones entered alive: the river drifting on under a fallen leaf reaches nothing', () => {
+    const boundary = segmentStart(seed, 1);
+    const w = placeAt(seed, boundary - 20);
+    expect(w.zonesReached).toBe(1);
+    w.player.hearts = 1;
+    applyHit(w, simState(w), 'rock', w.player.x, w.player.y);
+    expect(w.state).toBe('dying');
+    const atDeath = summarize(w).zonesReached;
+    while (w.state !== 'over') stepWorld(w, NONE, SIM_DT);
+    // The leaf really was carried over the line while it sank...
+    expect(w.distance).toBeGreaterThan(boundary);
+    // ...and still never got there.
+    expect(w.zonesReached).toBe(1);
+    expect(summarize(w).zonesReached).toBe(atDeath);
+    expect(w.events.some((e) => e.type === 'zone')).toBe(false);
+  });
+
+  it('counts different zones: meeting the Jungle again does not make a fifth of four', () => {
+    // Walk the leaf through the first five segments of a seed (zone by zone, alive).
+    let checked = 0;
+    for (const seed2 of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const w = newRun(seed2);
+      w.player.hearts = 1e9;
+      const entered = new Set<ZoneId>(['jungle']);
+      for (let i = 1; i <= 6; i++) {
+        w.distance = segmentStart(seed2, i) + 1;
+        stepWorld(w, NONE, SIM_DT);
+        entered.add(segmentZone(seed2, i));
+        expect(w.zonesReached, `seed ${seed2} segment ${i}`).toBe(entered.size);
+        checked++;
+        w.events.length = 0;
+      }
+      expect(w.zonesReached).toBe(4);
+    }
+    expect(checked).toBe(48);
+  });
+});
+
 // --- World integration -----------------------------------------------------------------
 
 describe('zones in a running world', () => {
@@ -645,7 +855,9 @@ describe('zones in a running world', () => {
     const last = zoneAt(seed, w.distance, sample).index;
     expect(last).toBeGreaterThanOrEqual(4);
     expect(zoneEvents).toHaveLength(last);
-    expect(w.zonesReached).toBe(1 + last);
+    // Counts different zones (the opening Jungle included), not river stretches: the Jungle comes round again.
+    expect(w.zonesReached).toBe(new Set<ZoneId>(['jungle', ...zoneEvents.map((ev) => ev.zone)]).size);
+    expect(w.zonesReached).toBeLessThanOrEqual(ZONE_IDS.length);
     zoneEvents.forEach((ev, k) => {
       expect(ev.zone).toBe(segmentZone(seed, k + 1));
       // Fired on the step the leaf crossed the boundary (one step is a few units of river).

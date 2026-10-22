@@ -21,6 +21,8 @@ export interface PlayOptions {
   pan?: number;
   /** Extra gain multiplier, 0..1. */
   volume?: number;
+  /** Which voicing of a sound to play (the zone stinger: 0 Jungle, 1 Marsh, 2 Rapids, 3 Night). */
+  variant?: number;
 }
 
 const MUSIC_URL = 'audio/bgm.mp3';
@@ -52,8 +54,12 @@ const MAX_LOW_VOICES = 16;
 const NEAR_MISS_STRUM = 0.06;
 /** So are crumbs (honey pulls several in at once); tighter, since they are shorter. */
 const CRUMB_STRUM = 0.04;
-/** A crumb that would have to wait longer than this for its slot is skipped: late plucks smear. */
-const CRUMB_MAX_WAIT = 0.14;
+/**
+ * A crumb that would have to wait longer than this for its slot is skipped: late
+ * plucks smear. Room for six: honey can pull a whole trail in on the same frame,
+ * and a streak that climbs in pitch should be heard note by note.
+ */
+const CRUMB_MAX_WAIT = 0.25;
 /** Music lowpass (Hz) at full night darkness: the jungle closes in, nothing harsh. */
 const NIGHT_CUTOFF = 4200;
 /** Distant thunder rolls on its own once the storm is this strong. */
@@ -247,7 +253,7 @@ export class AudioManager {
 
       const volume = Math.max(0, Math.min(1.5, opts?.volume ?? 1)) * spec.level;
       const voice = new Voice(kit, t, volume, opts?.pan ?? 0, spec.send);
-      spec.build(voice, opts?.combo ?? 1);
+      spec.build(voice, opts?.combo ?? 1, opts?.variant ?? 0);
       this.commitVoice(voice);
 
       if (sfx === 'hit') this.duck(0.45, 0.2, 0.5);
