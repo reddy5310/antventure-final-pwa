@@ -336,6 +336,34 @@ function dispatch(e: GameEvent): void {
     case 'game-over':
       finishRun();
       break;
+    case 'zone':
+      audio.play('zone');
+      break;
+    case 'pickup':
+      // Crumb plucks climb in pitch along a trail (streak); power-ups whoosh.
+      if (e.kind === 'crumb') audio.play('crumb', { combo: e.streak, pan: panOf(e.x) });
+      else audio.play('power', { pan: panOf(e.x) });
+      vibrate(e.kind === 'crumb' ? 4 : 14);
+      break;
+    case 'trail-complete':
+      audio.play('trail', { pan: panOf(e.x) });
+      vibrate([10, 20, 10]);
+      break;
+    case 'power-end':
+      audio.play('power-end');
+      break;
+    case 'shield-block':
+      audio.play('shield', { pan: panOf(e.x) });
+      vibrate(30);
+      break;
+    case 'heal':
+      audio.play('heart-up');
+      break;
+    case 'pad-bump':
+      audio.play('pad', { pan: panOf(e.x), volume: 0.7 });
+      vibrate(8);
+      break;
+    case 'power-start':
     case 'start':
       break;
   }

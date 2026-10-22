@@ -34,6 +34,8 @@ import {
   PATTERN_MAX_FALL,
   WET_PER_SPLASH,
 } from './tuning';
+import { nearBandScale } from './powers';
+import { currentZoneMods } from './zones';
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -358,7 +360,7 @@ export function spawnDrops(world: World, st: SimState, dt: number): void {
   // Timers count in spawns, drained at the current rate, so a change of
   // storm phase or difficulty takes effect at once rather than after the
   // previously scheduled gap.
-  const rate = diff.dropRate * mods.rate * diff.grace;
+  const rate = diff.dropRate * mods.rate * diff.grace * currentZoneMods(world).rain;
   st.dropTimer -= dt * rate;
   if (st.dropTimer <= 0) spawnSingle(world, st);
 
@@ -401,7 +403,7 @@ export function updateDrops(world: World, st: SimState, dt: number, live: boolea
     if (dist2 < hitR * hitR) {
       if (p.invuln <= 0) applyHit(world, st, 'drop', p.x, p.y);
     } else {
-      const nearR = hitR + NEAR_BAND;
+      const nearR = hitR + NEAR_BAND * nearBandScale(world);
       if (dist2 < nearR * nearR && p.invuln <= 0) registerNearMiss(world, d.x, d.y);
       if (onLeaf) p.wet = Math.min(1, p.wet + WET_PER_SPLASH);
     }

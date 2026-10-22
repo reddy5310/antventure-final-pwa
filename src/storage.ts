@@ -56,7 +56,7 @@ function freshData(): SaveData {
     boards: {},
     dailyAttempts: {},
     dailyFirst: {},
-    stats: { runs: 0, totalDistanceM: 0, totalNearMisses: 0, bestCombo: 0 },
+    stats: { runs: 0, totalDistanceM: 0, totalNearMisses: 0, bestCombo: 0, totalCrumbs: 0 },
   };
 }
 
@@ -132,6 +132,7 @@ function cleanStats(raw: unknown): LifetimeStats {
     totalDistanceM: Math.floor(num(s.totalDistanceM, 0, 0)),
     totalNearMisses: Math.floor(num(s.totalNearMisses, 0, 0)),
     bestCombo: Math.floor(num(s.bestCombo, 0, 0)),
+    totalCrumbs: Math.floor(num(s.totalCrumbs, 0, 0)),
   };
 }
 
@@ -323,6 +324,7 @@ export function recordRun(summary: RunSummary): RecordResult {
   data.stats.totalDistanceM += summary.distanceM;
   data.stats.totalNearMisses += summary.nearMisses;
   data.stats.bestCombo = Math.max(data.stats.bestCombo, summary.maxCombo);
+  data.stats.totalCrumbs += Math.max(0, Math.floor(summary.crumbs || 0));
 
   pruneDaily();
   persist();

@@ -159,7 +159,8 @@ export function updateObstacles(world: World, st: SimState, dt: number, live: bo
       if (o.x - ext < edges.left && o.vx < 0) o.vx = -o.vx;
       else if (o.x + ext > edges.right && o.vx > 0) o.vx = -o.vx;
     }
-    if (live && !o.hit && world.state === 'running' && circleHitsObstacle(o, p.x, p.y, LEAF_HIT_R)) {
+    // Lily pads never damage (their bumper behaviour belongs to the zones agent).
+    if (live && !o.hit && o.kind !== 'pad' && world.state === 'running' && circleHitsObstacle(o, p.x, p.y, LEAF_HIT_R)) {
       o.hit = true;
       // Brushing past while still invulnerable is free.
       if (p.invuln <= 0) {

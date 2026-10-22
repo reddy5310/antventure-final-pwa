@@ -297,6 +297,110 @@ export const SFX: Record<Sfx, SfxSpec> = {
     },
   },
 
+  // PLACEHOLDER — replaced by the audio agent.
+  crumb: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 1800, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 1800, 2200, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  trail: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 1200, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 1200, 2400, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  power: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 600, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 600, 1500, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  'power-end': {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 900, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 900, 500, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  shield: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 400, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 400, 260, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  'heart-up': {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 700, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 700, 1100, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  zone: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 500, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 500, 750, 0.07);
+    },
+  },
+
+  // PLACEHOLDER — replaced by the audio agent.
+  pad: {
+    level: 0.5,
+    send: 0.05,
+    low: true,
+    build(v) {
+      const t = v.t;
+      const g = v.gain(v.out);
+      const o = v.osc('sine', 300, t, perc(g.gain, t, 0.002, 0.3, 0.08), g);
+      glide(o.frequency, t, 300, 220, 0.07);
+    },
+  },
+
   tap: {
     level: 0.6,
     send: 0,

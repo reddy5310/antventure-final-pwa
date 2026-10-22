@@ -34,6 +34,8 @@ function run(score: number, extra: Partial<RunSummary> = {}): RunSummary {
     mode: 'endless',
     dailyId: null,
     seed: 1,
+    crumbs: 0,
+    zonesReached: 1,
     score,
     distanceM: Math.floor(score / 2),
     timeS: 30,

@@ -14,6 +14,9 @@ import { addDistanceScore, checkProgress, updateCombo } from './scoring';
 import { simState, type SimState } from './state';
 import { initStorm, updateStorm } from './storm';
 import { ATTRACT_SCROLL, DEATH_DURATION, DEATH_STOP_TIME, DRY_RATE, WET_FLOOR_PER_INTENSITY } from './tuning';
+import { layoutPickups, updatePickups } from './pickups';
+import { updatePowers } from './powers';
+import { currentZoneMods, trackZone } from './zones';
 
 export { difficultyAt, levelAt, type Difficulty } from './difficulty';
 
@@ -63,7 +66,16 @@ export function createWorld(opts: CreateWorldOptions): World {
     deathTimer: 0,
     nextId: 1,
     events: opts.attract ? [] : [{ type: 'start' }],
+    zone: 'jungle',
+    nextZone: 'jungle',
+    zoneBlend: 0,
+    zonesReached: 1,
+    pickups: [],
+    crumbs: 0,
+    powers: [],
+    darkness: 0,
   };
+  trackZone(world);
   const st = simState(world);
   if (opts.attract) {
     world.intensity = 0.22;
@@ -88,8 +100,10 @@ function tickPlayerTimers(world: World, dt: number): void {
 function stepRunning(world: World, st: SimState, input: InputFrame, dt: number): void {
   world.time += dt;
   const diff = difficultyAt(world.time, st.diff);
-  world.scrollSpeed = diff.scroll;
-  const travelled = diff.scroll * dt;
+  trackZone(world);
+  // Rapids run faster, Lily Marsh slower (blended across transitions).
+  world.scrollSpeed = diff.scroll * currentZoneMods(world).scroll;
+  const travelled = world.scrollSpeed * dt;
   world.distance += travelled;
   addDistanceScore(world, travelled);
 
@@ -100,8 +114,11 @@ function stepRunning(world: World, st: SimState, input: InputFrame, dt: number):
 
   updateDrops(world, st, dt, true);
   updateObstacles(world, st, dt, true);
+  updatePickups(world, dt, true);
+  if (world.state === 'running') updatePowers(world, dt);
   if (world.state === 'running') {
     layoutObstacles(world, st);
+    layoutPickups(world);
     spawnDrops(world, st, dt);
     checkProgress(world, st);
   }
@@ -119,6 +136,8 @@ function stepDying(world: World, st: SimState, dt: number): void {
   tickPlayerTimers(world, dt);
   updateDrops(world, st, dt, false);
   updateObstacles(world, st, dt, false);
+  updatePickups(world, dt, false);
+  trackZone(world);
   if (world.deathTimer >= DEATH_DURATION) {
     world.state = 'over';
     if (!st.gameOverSent) {
@@ -138,12 +157,14 @@ function stepOver(world: World, st: SimState, dt: number): void {
   tickPlayerTimers(world, dt);
   updateDrops(world, st, dt, false);
   updateObstacles(world, st, dt, false);
+  updatePickups(world, dt, false);
 }
 
 function stepAttract(world: World, st: SimState, dt: number): void {
   world.time += dt;
   world.scrollSpeed = ATTRACT_SCROLL;
   world.distance += ATTRACT_SCROLL * dt;
+  trackZone(world);
   updateStorm(world, st, dt, false);
   autopilot(world, st, dt);
 }
@@ -206,5 +227,7 @@ export function summarize(world: World): RunSummary {
     maxCombo: world.maxCombo,
     hitsTaken: world.hitsTaken,
     killedBy: ended ? st.killedBy : null,
+    crumbs: world.crumbs,
+    zonesReached: world.zonesReached,
   };
 }
