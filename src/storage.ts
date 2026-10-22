@@ -26,6 +26,12 @@ interface SaveData {
   /** Daily id → score of the first attempt that day (the "first try" a share card shows). */
   dailyFirst: Record<string, number>;
   stats: LifetimeStats;
+  /**
+   * Crumbs to spend in Phase 3's shop. Every run adds what it collected;
+   * nothing takes any away yet, so for now it tracks stats.totalCrumbs (which
+   * stays a lifetime total once spending exists).
+   */
+  wallet: number;
 }
 
 function prefersReducedMotion(): boolean {
@@ -57,6 +63,7 @@ function freshData(): SaveData {
     dailyAttempts: {},
     dailyFirst: {},
     stats: { runs: 0, totalDistanceM: 0, totalNearMisses: 0, bestCombo: 0, totalCrumbs: 0 },
+    wallet: 0,
   };
 }
 
@@ -157,6 +164,7 @@ function load(): SaveData {
       dailyAttempts: cleanCounts(parsed.dailyAttempts),
       dailyFirst: cleanCounts(parsed.dailyFirst),
       stats: cleanStats(parsed.stats),
+      wallet: Math.floor(num(parsed.wallet, 0, 0)),
     };
   } catch {
     // Unreadable (blocked storage, corrupt JSON): keep what this tab has.
@@ -283,6 +291,11 @@ export function getStats(): LifetimeStats {
   return { ...data.stats };
 }
 
+/** Crumbs available to spend (Phase 3). */
+export function getWallet(): number {
+  return data.wallet;
+}
+
 export interface RecordResult {
   entry: ScoreEntry;
   /** 1-based rank on the board, or null if it didn't make the top list. */
@@ -324,7 +337,9 @@ export function recordRun(summary: RunSummary): RecordResult {
   data.stats.totalDistanceM += summary.distanceM;
   data.stats.totalNearMisses += summary.nearMisses;
   data.stats.bestCombo = Math.max(data.stats.bestCombo, summary.maxCombo);
-  data.stats.totalCrumbs += Math.max(0, Math.floor(summary.crumbs || 0));
+  const crumbs = Math.max(0, Math.floor(summary.crumbs || 0));
+  data.stats.totalCrumbs += crumbs;
+  data.wallet += crumbs;
 
   pruneDaily();
   persist();

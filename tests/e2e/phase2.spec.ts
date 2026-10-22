@@ -190,8 +190,9 @@ test.describe('river zones', () => {
           }, 700);
         }),
     );
-    // Brighter than the dark water next to it (the exact colours are the renderer's business).
-    expect(lit.ring).toBeGreaterThan(lit.around + 60);
+    // Far brighter than the dark water next to it (about 560 against about 30 on the sum of r, g and b;
+    // the exact colours are the renderer's business, but a faint ring would be a fairness bug).
+    expect(lit.ring).toBeGreaterThan(lit.around + 250);
   });
 });
 

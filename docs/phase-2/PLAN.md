@@ -143,17 +143,17 @@ export interface ActivePower { kind: PowerKind; left: number; total: number }
 
 ## Work breakdown
 
-| # | Issue | Depends on | Size | Model |
-|---|---|---|---|---|
-| 1 | Contracts + zone timeline (sim) | — | M | coding tier |
-| 2 | Zone looks: Jungle/Marsh/Rapids render + banner + stinger | 1 | L | coding tier |
-| 3 | Night River render: darkness mask, glowing telegraphs, fireflies | 2 | M | coding tier |
-| 4 | Crumbs (sim + storage) | 1 | M | coding tier |
-| 5 | Crumbs (render, HUD, audio, game over) | 4 | M | coding tier |
-| 6 | Power-ups (sim) | 4 | M | coding tier |
-| 7 | Power-ups (render, HUD, audio, hints, help) | 5, 6 | M | coding tier |
-| 8 | Zone mechanics: marsh pads, rapids density, night mods + fairness tests | 1, 3 | M | coding tier |
-| 9 | Balance + QA pass: bot metrics, e2e, README | all | M | planning tier review |
+| # | Issue | Depends on | Size | Model | Status |
+|---|---|---|---|---|---|
+| 1 | Contracts + zone timeline (sim) | — | M | coding tier | Implemented |
+| 2 | Zone looks: Jungle/Marsh/Rapids render + banner + stinger | 1 | L | coding tier | Implemented |
+| 3 | Night River render: darkness mask, glowing telegraphs, fireflies | 2 | M | coding tier | Implemented |
+| 4 | Crumbs (sim + storage) | 1 | M | coding tier | Implemented |
+| 5 | Crumbs (render, HUD, audio, game over) | 4 | M | coding tier | Implemented |
+| 6 | Power-ups (sim) | 4 | M | coding tier | Implemented |
+| 7 | Power-ups (render, HUD, audio, hints, help) | 5, 6 | M | coding tier | Implemented |
+| 8 | Zone mechanics: marsh pads, rapids density, night mods + fairness tests | 1, 3 | M | coding tier | Implemented |
+| 9 | Balance + QA pass: bot metrics, e2e, README | all | M | planning tier review | Implemented (see "As shipped") |
 
 Issues 2–3 and 4–6 are independent tracks, but **run one at a time** to
 avoid merge conflicts and keep usage predictable.
@@ -202,3 +202,61 @@ expensive part).
 | Power-ups seen per 2-minute run | 2–3 |
 | Zones reached per 2-minute run | 2–3 |
 | Frame time | game code p95 under 2 ms in headless Chromium |
+
+## As shipped
+
+Where the shipped game differs from the design above, and what was measured.
+Numbers come from `tests/unit` bots (keyboard-speed dodging bot, 0.2 s
+reaction) and from headless Chromium, so read them as relative, not absolute.
+
+### Deviations from the design
+
+- **Crumb trails** start 55–105 m apart (not 40–90 m), scaled by the zone's
+  crumb multiplier. At 40–90 m a crumb-chasing bot made about 19 % of its score
+  from crumbs, the top of the 10–20 % target.
+- **First power-up** comes at 64–110 m, after the point where an idle player has
+  died, and two power-ups are never laid out less than 100 m apart.
+- **Lily pads** (radius 18–30, no damage) are packed 1.35× denser than rocks.
+  The shove is capped at 150 u/s, well under keyboard speed, so a player can
+  always push through. A gate row in the Marsh becomes two pads, so the Marsh
+  has no rocks at all (twigs still hurt). Pads switch on at the blend's midpoint.
+- **Obstacle density follows the clock a living run keeps**
+  (`timeAtDistanceOnRiver`, which integrates the real zone speeds), so the
+  difficulty curve does not drift after the first zone change.
+- **Drops across a zone change** are placed with `expectedTravel`, which
+  includes the speed change on the way, so a drop spawned inside a 12 m blend
+  lands on the row it was meant for (a unit test pins this).
+- **Obstacles look 280 units further ahead** than before, so crumbs and
+  power-ups (laid out only once the obstacle stream has passed them) first
+  appear above the top edge on tall phones too.
+- **`wallet`** is saved next to `stats.totalCrumbs`: crumbs to spend in Phase 3.
+  Nothing spends it yet.
+- **The zone stinger** is the same for every zone (the audio call carries no zone id).
+
+### Measured
+
+| Metric | Target | Result |
+|---|---|---|
+| Idle-player survival (median) | unchanged (15–25 s) | 15.5 s over 5 seeds, 16.1 s over 24; identical to Phase 1 on the same seeds |
+| Dodging-bot survival (median) | 100–160 s (Phase 1: ~127 s) | 128.5 s over 24 seeds (p25 108.8, p75 137.6); Phase 1 gave 139.1 s on the same seeds, the Rapids make Phase 2 a little harder |
+| Zones reached by the bot | 2–3 per two minutes | median 3, mean 3.2 (the bot lives about 2 min) |
+| Crumb share of a strong bot's score | 10–20 % | 17.6 % for a bot that routes for crumbs, 8 % for one that ignores them (gated by `pickups.test.ts`) |
+| Power-ups seen per two-minute run | 2–3 | about 2.1 (gated by `pickups.test.ts`) |
+| Frame time, game code p95 | under 2 ms | phone 390×844 at density 2: Jungle 1.5–1.6, Night 1.6–1.9, Rapids 1.9–2.3, Marsh 2.2–2.5 ms (p50 0.8–1.3 ms) |
+
+The frame times are rAF callback durations (simulation, render and HUD) in
+headless Chromium with software GL on a shared machine, so they overstate a
+real phone, but Marsh is the most expensive zone to draw (many decorative
+lily sprites): that is the first place to trim if a device struggles
+(`MARSH_LILY_SLOT` in `src/render/water.ts`).
+
+### Known limits and follow-ups
+
+- Rapids are the hardest zone for the bot (about 5 hits a minute against 4 in
+  Jungle). If humans find them too rough, `ZONES.rapids.rocks` (1.4) is the knob.
+- The stock test bot dodges lily pads like rocks; `createDodgeBot({ ignorePads: true })`
+  behaves like a human who ignores them.
+- Crumbs are 22 units apart and the pickup radius is 32, so on a straight trail
+  missing one crumb means missing its neighbours.
+- Phase 3 candidates: a zone-specific stinger, spending crumbs, missions.
+

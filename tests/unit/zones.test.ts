@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { LEAF_HIT_R, SIM_DT, SPAWN_AHEAD, UNITS_PER_METER, WORLD_W } from '../../src/config';
 import { timeAtDistance, timeAtDistanceOnRiver, difficultyAt, levelAt, scrollAtLevel } from '../../src/game/difficulty';
+import { spawnDemoDrop } from '../../src/game/drops';
 import { expectedTravel } from '../../src/game/fairness';
 import { layoutObstacles, maxTwigLen, PAD_BUMP_COOLDOWN, PAD_DENSITY, PAD_PUSH_MAX, PAD_R_MAX, PAD_R_MIN } from '../../src/game/obstacles';
 import { riverEdgesAt } from '../../src/game/river';
@@ -760,38 +761,44 @@ describe('zones in a running world', () => {
 });
 
 describe('rain across a change of river speed', () => {
-  /** A boundary between Marsh and Rapids (the biggest speed step, x0.9 against x1.3) on some seed. */
-  function speedStep(): { seed: number; start: number } {
-    for (let seed = 1; seed < 80; seed++) {
-      for (let i = 1; i < 10; i++) {
-        const a = segmentZone(seed, i - 1);
-        const b = segmentZone(seed, i);
-        if ((a === 'marsh' && b === 'rapids') || (a === 'rapids' && b === 'marsh')) return { seed, start: segmentStart(seed, i) };
+  /** The first Marsh -> Rapids and Rapids -> Marsh boundaries (the biggest speed steps, x0.9 against x1.3) on some seeds. */
+  function speedSteps(): { label: string; seed: number; start: number }[] {
+    const found: { label: string; seed: number; start: number }[] = [];
+    for (const [from, to] of [['marsh', 'rapids'], ['rapids', 'marsh']] as const) {
+      search: for (let seed = 1; seed < 120; seed++) {
+        for (let i = 1; i < 10; i++) {
+          if (segmentZone(seed, i - 1) === from && segmentZone(seed, i) === to) {
+            found.push({ label: `${from} -> ${to}`, seed, start: segmentStart(seed, i) });
+            break search;
+          }
+        }
       }
     }
-    throw new Error('no Marsh/Rapids boundary in the first 80 seeds');
+    return found;
   }
 
-  it('aimed drops land on the leaf row they were placed for, even when the river speeds up or slows down under them', () => {
-    // Aimed drops are meant to land within a few units of the leaf's row. A spawn that assumed today's speed
-    // for its whole fall would land metres off if the speed changed on the way.
-    const { seed, start } = speedStep();
-    const w = placeAt(seed, start - 6 * U);
-    const row = new Map<number, number>();
-    let aimed = 0;
-    for (let i = 0; i < 14 / SIM_DT; i++) {
-      stepWorld(w, NONE, SIM_DT);
-      w.player.invuln = 60;
-      for (const d of w.drops) if (d.aimed) row.set(d.id, d.y - w.player.y);
-      w.events.length = 0;
+  it('a drop spawned just before the river speeds up or slows down still lands on the row it was placed for', () => {
+    // The demo drop is placed to land exactly on the leaf's row, a couple of seconds ahead: long enough to fly
+    // across the start of a new zone. A spawn that assumed today's speed for its whole fall would land metres off.
+    const steps = speedSteps();
+    expect(steps).toHaveLength(2);
+    for (const { label, seed, start } of steps) {
+      const w = placeAt(seed, start - 1.5 * U);
+      const speedBefore = w.scrollSpeed;
+      spawnDemoDrop(w, simState(w));
+      expect(w.drops, label).toHaveLength(1);
+      const drop = w.drops[0];
+      let row = NaN;
+      for (let i = 0; w.drops.includes(drop) && i < 20 / SIM_DT; i++) {
+        stepWorld(w, NONE, SIM_DT);
+        w.events.length = 0;
+        if (w.drops.includes(drop)) row = drop.y - w.player.y;
+      }
+      // It really did fly across the change...
+      expect(Math.abs(w.scrollSpeed - speedBefore) / speedBefore, label).toBeGreaterThan(0.05);
+      // ...and still landed on the row (one step of drift is under 2 units).
+      expect(Math.abs(row), label).toBeLessThan(3);
     }
-    for (const v of row.values()) {
-      aimed++;
-      // +-6 is the aim spread; the rest is one step of drift and rounding.
-      expect(Math.abs(v)).toBeLessThan(9.5);
-    }
-    expect(aimed).toBeGreaterThan(4);
-    expect(zoneAt(seed, w.distance, sample).index).toBeGreaterThan(zoneAt(seed, start - 6 * U, sample).index);
   });
 });
 
