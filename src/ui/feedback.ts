@@ -140,7 +140,7 @@ export class Banners {
 
 // ---------------------------------------------------------------------------
 
-export type PillKind = 'trail' | 'block';
+export type PillKind = 'trail' | 'block' | 'mission';
 
 const MAX_PILLS = 2;
 const PILL_MS = 1000;
@@ -158,11 +158,12 @@ export class Pills {
     this.el = h('div', { class: 'pills', role: 'status', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   }
 
-  show(kind: PillKind, text: string, iconName: IconName, detail?: string): void {
+  /** `silent`: the caller announces it itself (with more detail), so screen readers skip the pill. */
+  show(kind: PillKind, text: string, iconName: IconName, detail?: string, silent = false): void {
     while (this.el.children.length >= MAX_PILLS) this.el.firstElementChild?.remove();
     const el = h(
       'div',
-      { class: `pill pill-${kind}` },
+      { class: `pill pill-${kind}`, 'aria-hidden': silent ? 'true' : null },
       icon(iconName, 'icon pill-icon'),
       h('span', { class: 'pill-text' }, text),
       detail ? h('span', { class: 'pill-detail' }, detail) : null,

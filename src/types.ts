@@ -263,6 +263,8 @@ export interface TitleInfo {
   endlessBest: ScoreEntry | null;
   daily: DailyInfo & { best: ScoreEntry | null; attempts: number };
   stats: LifetimeStats;
+  /** Phase 3: wallet, streak, today's missions, skins. */
+  meta: MetaInfo;
 }
 
 export interface GameOverInfo {
@@ -273,6 +275,8 @@ export interface GameOverInfo {
   prevBest: ScoreEntry | null;
   board: ScoreEntry[];
   daily: DailyInfo | null;
+  /** Phase 3: what this run earned (streak, missions, badges, crumbs). */
+  meta: MetaRewards | null;
 }
 
 export type Sfx =
@@ -298,8 +302,92 @@ export type Sfx =
   | 'shield'
   | 'heart-up'
   | 'zone'
-  | 'pad';
+  | 'pad'
+  | 'purchase'
+  | 'mission'
+  | 'achievement';
 
 export type AudioScene = 'menu' | 'run' | 'paused' | 'over';
 
 export type TutorialHint = 'steer' | 'shadows' | null;
+
+// --- Phase 3: meta progression (src/meta/) --------------------------------
+// Cosmetic and meta only: nothing here may change the simulation.
+
+export type SkinId = 'classic' | 'leafcutter' | 'bee' | 'ember' | 'golden' | 'nightglow';
+
+export type SkinPattern = 'none' | 'stripes' | 'glow' | 'shine';
+
+/** Replaces the ant colours in src/render/palette.ts (P.ant, antMid, antDark, antOutline, antHighlight). */
+export interface SkinPalette {
+  body: string;
+  mid: string;
+  dark: string;
+  outline: string;
+  highlight: string;
+  pattern: SkinPattern;
+  /** Stripe / glow / shine colour for the pattern ('' for 'none'). */
+  accent: string;
+}
+
+export interface Skin {
+  id: SkinId;
+  name: string;
+  /** Crumb price, or null when it can only be unlocked by an achievement. */
+  price: number | null;
+  /** Achievement id that unlocks it (price null). */
+  unlockedBy: string | null;
+  palette: SkinPalette;
+}
+
+export type MissionTier = 'easy' | 'medium' | 'hard';
+
+export interface MissionView {
+  id: string;
+  tier: MissionTier;
+  /** Player-facing text, e.g. "Collect 30 crumbs in one run". */
+  text: string;
+  target: number;
+  progress: number;
+  done: boolean;
+  reward: number;
+}
+
+export interface AchievementView {
+  id: string;
+  name: string;
+  /** How to earn it, e.g. "Travel 1,000 m in one run". */
+  desc: string;
+  unlocked: boolean;
+  reward: number;
+  /** Skin it unlocks, if any. */
+  skin: SkinId | null;
+}
+
+export interface StreakInfo {
+  count: number;
+  best: number;
+  /** A run has been finished today (local date). */
+  playedToday: boolean;
+}
+
+export interface MetaInfo {
+  wallet: number;
+  streak: StreakInfo;
+  /** Today's three missions (easy, medium, hard). */
+  missions: MissionView[];
+  owned: SkinId[];
+  equipped: SkinId;
+  badges: { unlocked: number; total: number };
+}
+
+export interface MetaRewards {
+  /** Crumbs collected during the run (already in the wallet via recordRun). */
+  runCrumbs: number;
+  /** Extra crumbs credited now: missions + streak milestones + badges. */
+  bonus: number;
+  missionsDone: MissionView[];
+  badgesUnlocked: AchievementView[];
+  streak: StreakInfo & { extended: boolean; milestoneBonus: number };
+  wallet: number;
+}

@@ -453,6 +453,34 @@ function triangle(phase: number): number {
   return f < 0.25 ? 4 * f : f < 0.75 ? 2 - 4 * f : 4 * f - 4;
 }
 
+/** A dare trail rides this many units outside the rock's hit circle (rock + leaf radius). */
+const DARE_GAP = [3, 8] as const;
+/** Away from the rock the trail runs on at this share of the ring's radius off its centreline. */
+const DARE_LANE = 0.6;
+
+/**
+ * Lateral distance from the rock's centre of a dare crumb `dd` units along the
+ * river from it: the circle of radius ringR beside the rock, then a straight
+ * run at DARE_LANE of it. Max(), so every crumb is at least ringR from the
+ * centre (the lane only starts where dd alone is already that far) and the
+ * step between neighbouring crumbs stays about as steep as a zigzag's.
+ */
+function dareOffset(ringR: number, dd: number): number {
+  return Math.max(chord(ringR, dd), ringR * DARE_LANE);
+}
+
+/** The side whose ring is cut off by the bank less often (ties: the roomier side). */
+function dareSide(st: PickupState, n: number, ref: Disc, ringR: number, pref: 1 | -1): 1 | -1 {
+  let rightCut = 0;
+  let leftCut = 0;
+  for (let i = 0; i < n; i++) {
+    const off = dareOffset(ringR, st.ds[i] - ref.d);
+    if (ref.x + off > st.hi[i]) rightCut++;
+    if (ref.x - off < st.lo[i]) leftCut++;
+  }
+  return rightCut === leftCut ? pref : rightCut < leftCut ? 1 : -1;
+}
+
 function pickShape(u: number): Shape {
   if (u < 0.3) return 'line';
   if (u < 0.58) return 'arc';
@@ -550,9 +578,11 @@ function layoutTrail(world: World, st: PickupState, d0: number): void {
         st.xs[i] = cx - sgn * 22 + sgn * 44 * 4 * t * (1 - t);
       }
     } else if (shape === 'dare' && ref) {
-      // Hugging the rock: the crumbs sit just outside its collision circle, on the passing side.
-      const s = roomySide(seed, ref, uSide);
-      for (let i = 0; i < n; i++) st.xs[i] = ref.x + s * (ref.r + LEAF_HIT_R + 8);
+      // Rides the rock's collision circle a few units outside it, so every crumb
+      // beside the rock is a real dare, then runs on parallel to its lane.
+      const ringR = ref.r + LEAF_HIT_R + lerp(DARE_GAP[0], DARE_GAP[1], uAmp);
+      const s = dareSide(st, n, ref, ringR, roomySide(seed, ref, uSide));
+      for (let i = 0; i < n; i++) st.xs[i] = ref.x + s * dareOffset(ringR, st.ds[i] - ref.d);
     } else {
       for (let i = 0; i < n; i++) st.xs[i] = cx;
     }
@@ -565,6 +595,16 @@ function layoutTrail(world: World, st: PickupState, d0: number): void {
     }
     if (trailId === 1) {
       for (let i = 0; i < n; i++) if (Math.abs(st.xs[i] - startX) < PICKUP_R + 6) st.ok[i] = 0;
+    }
+    // A dare crumb the bank clamp or a neighbour pushed into the rock's hit
+    // circle would cost a heart to take: drop it (a crumb is never worth a hit).
+    if (shape === 'dare' && ref) {
+      const hitR = ref.r + LEAF_HIT_R;
+      for (let i = 0; i < n; i++) {
+        const dx = st.xs[i] - ref.x;
+        const dd = st.ds[i] - ref.d;
+        if (dx * dx + dd * dd < hitR * hitR) st.ok[i] = 0;
+      }
     }
     count = 0;
     for (let i = 0; i < n; i++) {

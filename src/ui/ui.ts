@@ -20,6 +20,10 @@ import type {
   Mode,
   Settings,
   Sfx,
+  SkinId,
+  MetaInfo,
+  AchievementView,
+  MissionView,
   TitleInfo,
   TutorialHint,
   World,
@@ -27,12 +31,14 @@ import type {
 import { focusEl, focusables, h } from './dom';
 import type { UIEnv } from './env';
 import { Banners, Countdown, PickupHint, Pills, Toasts, Tutorial } from './feedback';
-import { fmtMeters } from './format';
+import { fmtInt, fmtMeters } from './format';
 import { Hud } from './hud';
 import { Modals } from './modal';
+import { buildBadges } from './modals/badges';
 import { buildHelp } from './modals/help';
 import { buildLeaderboard } from './modals/leaderboard';
 import { buildSettings, type SettingsModal } from './modals/settings';
+import { buildShop } from './modals/shop';
 import { ZONE_INFO } from './pickupinfo';
 import { GameOverScreen } from './screens/gameover';
 import { PauseScreen } from './screens/pause';
@@ -53,11 +59,18 @@ export interface UIHandlers {
   onUserGesture(): void;
   /** UI sound effects (tap, back…). */
   onSfx(sfx: Sfx): void;
+  /** Phase 3 shop: returns true if bought / equipped. */
+  onBuySkin(id: SkinId): boolean;
+  onEquipSkin(id: SkinId): boolean;
 }
 
 export interface UIContext {
   getSettings(): Settings;
   getDevice(): Device;
+  /** Fresh Phase 3 snapshot (wallet, streak, missions, skins). */
+  getMeta(): MetaInfo;
+  /** Every achievement for the badges screen. */
+  getAchievements(): AchievementView[];
 }
 
 export interface ToastOptions {
@@ -125,6 +138,8 @@ export class UI {
       openSettings: () => this.openSettings(),
       openLeaderboard: (tab) => this.openLeaderboard(tab),
       openHelp: () => this.openHelp(),
+      openShop: () => this.openShop(),
+      openBadges: () => this.openBadges(),
     };
 
     this.hud = new Hud(this.env);
@@ -195,6 +210,12 @@ export class UI {
     this.mount('over', over.el);
     this.over = over;
     over.focusPrimary();
+  }
+
+  /** A mission finished mid-run: a small pill (non-blocking) and a screen-reader announcement. */
+  missionComplete(mission: MissionView): void {
+    this.pills.show('mission', 'Mission complete', 'check', `· +${fmtInt(mission.reward)}`, true);
+    this.announce(`Mission complete: ${mission.text}. Plus ${mission.reward} crumbs.`);
   }
 
   showTutorial(hint: TutorialHint): void {
@@ -324,6 +345,25 @@ export class UI {
   private openHelp(): void {
     const m = buildHelp(this.env, () => this.modals.closeTop());
     this.modals.open({ id: 'help', title: 'How to play', body: m.body, footer: m.footer, className: 'modal-help' });
+  }
+
+  private openShop(): void {
+    const m = buildShop(this.env);
+    this.modals.open({
+      id: 'shop',
+      title: 'Crumb shop',
+      body: m.body,
+      className: 'modal-shop',
+      onClose: () => {
+        m.destroy();
+        // Spending changed the wallet: bring the title chips up to date.
+        this.title?.setMeta(this.ctx.getMeta());
+      },
+    });
+  }
+
+  private openBadges(): void {
+    this.modals.open({ id: 'badges', title: 'Badges', body: buildBadges(this.env), className: 'modal-badges' });
   }
 
   // --- Internals ------------------------------------------------------------

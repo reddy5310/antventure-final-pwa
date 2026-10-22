@@ -14,6 +14,7 @@ import { SimInput } from './engine/sim-input';
 import { createViewport } from './engine/viewport';
 import { createWorld, setDropHold, setViewHeight, stepWorld, summarize } from './game/world';
 import { Renderer } from './render/renderer';
+import * as meta from './meta';
 import * as storage from './storage';
 import type { DailyInfo, GameEvent, InputFrame, Mode, Settings, TitleInfo, TutorialHint, World, ZoneId } from './types';
 import { RESTART_CONFIRM_AFTER } from './ui/screens/pause';
@@ -44,6 +45,7 @@ const viewport = createViewport(canvas, () => {
   setViewHeight(world, viewport.viewH);
 });
 const renderer = new Renderer(canvas, viewport, () => settings);
+renderer.setSkin(meta.equippedSkin());
 const audio = new AudioManager(settings);
 const input = new Input(canvas, viewport, () => settings.sensitivity);
 const simInput = new SimInput();
@@ -80,8 +82,23 @@ const ui = new UI(
     onToggleMute: () => toggleMute(),
     onUserGesture: () => audio.unlock(),
     onSfx: (sfx) => audio.play(sfx),
+    onBuySkin: (id) => {
+      const ok = meta.buySkin(id);
+      if (ok) audio.play('purchase');
+      return ok;
+    },
+    onEquipSkin: (id) => {
+      const ok = meta.equipSkin(id);
+      if (ok) renderer.setSkin(meta.equippedSkin());
+      return ok;
+    },
   },
-  { getSettings: () => settings, getDevice: () => input.lastDevice },
+  {
+    getSettings: () => settings,
+    getDevice: () => input.lastDevice,
+    getMeta: () => meta.metaInfo(),
+    getAchievements: () => meta.achievements(),
+  },
 );
 
 function makeAttractWorld(): World {
@@ -106,6 +123,7 @@ function titleInfo(): TitleInfo {
       attempts: storage.getDailyAttempts(daily.id),
     },
     stats: storage.getStats(),
+    meta: meta.metaInfo(),
   };
 }
 
@@ -124,7 +142,12 @@ function showTitle(): void {
 function recordRunOnce(): storage.RecordResult | null {
   if (runRecorded || (world.state !== 'dying' && world.state !== 'over')) return null;
   runRecorded = true;
-  return storage.recordRun(summarize(world));
+  const summary = summarize(world);
+  const result = storage.recordRun(summary);
+  // Retried during the death animation: no game-over screen, so rewards surface as a toast.
+  const rewards = meta.finishRun(summary);
+  if (rewards.bonus > 0) ui.toast(`+${rewards.bonus.toLocaleString()} crumbs earned`, { ms: 2200 });
+  return result;
 }
 
 /** Called before a run is replaced: keeps a run that already ended from vanishing. */
@@ -149,6 +172,7 @@ function startRun(mode: Mode): void {
     bestDistance: storage.getFarthest(mode, dailyId) * UNITS_PER_METER,
     viewH: viewport.viewH,
   });
+  meta.beginRun(mode, dailyId);
   renderer.reset();
   simInput.discard();
   scene = 'run';
@@ -218,6 +242,7 @@ function finishRun(): void {
   // game-over fires once per world and a replaced world never reaches it, so this is the first record.
   runRecorded = true;
   const result = storage.recordRun(summary);
+  const rewards = meta.finishRun(summary);
   ui.showGameOver({
     summary,
     rank: result.rank,
@@ -225,6 +250,7 @@ function finishRun(): void {
     prevBest: result.prevBest,
     board: result.board,
     daily: runDaily,
+    meta: rewards,
   });
   audio.setScene('over');
 }
@@ -301,6 +327,11 @@ const panOf = (x: number) => Math.max(-1, Math.min(1, (x - 200) / 200));
 function dispatch(e: GameEvent): void {
   renderer.onEvent(e, world);
   if (world.state === 'attract') return;
+  const missionDone = meta.onEvent(e, world);
+  if (missionDone) {
+    ui.missionComplete(missionDone);
+    audio.play('mission');
+  }
   ui.onEvent(e, world);
   switch (e.type) {
     case 'drop-impact':

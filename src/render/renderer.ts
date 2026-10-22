@@ -7,7 +7,7 @@
 // must never be hidden under the leaf it is about to hit, nor by the night.
 
 import type { Viewport } from '../engine/viewport';
-import type { GameEvent, Settings, World } from '../types';
+import type { GameEvent, Settings, Skin, World } from '../types';
 import { AntArt } from './ant';
 import { AttractDemo } from './attract-demo';
 import { Banks } from './banks';
@@ -81,6 +81,11 @@ export class Renderer {
     const reduced = this.getSettings().reducedMotion;
     this.fx.onEvent(e, world, reduced);
     if (e.type === 'storm' && world.state !== 'attract') this.weather.onStorm(e.phase, reduced);
+  }
+
+  /** Cosmetic ant skin (Phase 3). Never affects the simulation. */
+  setSkin(skin: Skin): void {
+    this.ant.setSkin(skin);
   }
 
   /** Clear transient effects (new run / back to menu). */

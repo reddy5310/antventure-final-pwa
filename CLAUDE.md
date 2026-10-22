@@ -77,5 +77,7 @@ the bottom. River distance at view y is `world.distance + (player.y - y)`.
 - Never skip or weaken a test to get green. Fix the cause.
 - Phase 2 (zones, crumbs, power-ups, the night river) has shipped; its design
   and an "As shipped" section with measured balance are in
-  `docs/phase-2/PLAN.md`. Implement only your issue's scope, and list anything
+  `docs/phase-2/PLAN.md`. Phase 3 (streak, daily missions, crumb shop with
+  skins, achievements) is planned in `docs/phase-3/PLAN.md`; later phases are
+  in `docs/ROADMAP.md`. Implement only your issue's scope, and list anything
   deferred in the PR description.

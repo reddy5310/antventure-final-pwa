@@ -3,12 +3,13 @@
 // river and the hero leaf stay visible behind it (see .title-leaf-gap in CSS).
 
 import { NAME_MAX } from '../../storage';
-import type { Settings, TitleInfo } from '../../types';
+import type { MetaInfo, Settings, TitleInfo } from '../../types';
 import { brandMark } from '../art';
 import { focusEl, h, setChildren } from '../dom';
 import type { UIEnv } from '../env';
 import { fmtDistance, fmtInt, fmtMeters, plural } from '../format';
 import { icon } from '../icons';
+import { missionRow, streakChip, walletChip } from '../metaview';
 
 /**
  * The input limit is in UTF-16 units; storage trims to NAME_MAX graphemes. A
@@ -38,6 +39,10 @@ export class TitleScreen {
   private installBtn: HTMLButtonElement;
   private hintEl: HTMLElement;
   private nameSlot: HTMLElement;
+  private chipsSlot = h('div', { class: 'meta-chips' });
+  private missionsSlot = h('div', { class: 'missions-slot' });
+  private shopBtn: HTMLButtonElement;
+  private badgesBtn: HTMLButtonElement;
   private onInstall: () => void = () => {};
 
   constructor(
@@ -72,6 +77,10 @@ export class TitleScreen {
     );
     this.setInstall(install.available, install.onInstall);
 
+    // Phase 3 buttons live in the top bar (there is no room for another row on a short phone).
+    this.shopBtn = h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Shop', title: 'Crumb shop', onclick: () => env.openShop() }, icon('shop'));
+    this.badgesBtn = h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Badges', onclick: () => env.openBadges() }, icon('medal'));
+
     const top = h(
       'div',
       { class: 'title-top' },
@@ -79,6 +88,8 @@ export class TitleScreen {
       h(
         'div',
         { class: 'title-top-group' },
+        this.shopBtn,
+        this.badgesBtn,
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Leaderboard', title: 'Leaderboard', onclick: () => env.openLeaderboard() }, icon('trophy')),
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'How to play', title: 'How to play', onclick: () => env.openHelp() }, icon('help')),
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Settings', title: 'Settings', onclick: () => env.openSettings() }, icon('settings')),
@@ -95,6 +106,7 @@ export class TitleScreen {
 
     this.nameSlot = h('div', { class: 'name-slot' });
     this.renderNameChip();
+    this.setMeta(info.meta);
 
     const best = info.endlessBest;
     this.playBtn = h(
@@ -155,11 +167,38 @@ export class TitleScreen {
       h(
         'div',
         { class: 'title-upper' },
-        h('div', { class: 'title-head' }, wordmark, this.nameSlot),
+        h('div', { class: 'title-head' }, wordmark, h('div', { class: 'title-id' }, this.nameSlot, this.chipsSlot)),
         h('div', { class: 'title-actions' }, this.playBtn, dailyBtn),
+        this.missionsSlot,
       ),
       h('div', { class: 'title-leaf-gap', 'aria-hidden': 'true' }),
       h('footer', { class: 'title-foot' }, this.hintEl, h('p', { class: 'title-stats' }, statsLine)),
+    );
+  }
+
+  /**
+   * Phase 3: wallet, streak and today's missions. Only the numbers are rebuilt
+   * (the shop closing); the Shop and Badges buttons stay, so focus returns to them.
+   */
+  setMeta(meta: MetaInfo): void {
+    const doneCount = meta.missions.filter((m) => m.done).length;
+    this.badgesBtn.title = `Badges ${meta.badges.unlocked}/${meta.badges.total}`;
+    setChildren(this.chipsSlot, walletChip(meta.wallet), streakChip(meta.streak));
+    setChildren(
+      this.missionsSlot,
+      meta.missions.length
+        ? h(
+            'section',
+            { class: 'missions-card', 'aria-label': 'Today’s missions' },
+            h(
+              'h2',
+              { class: 'missions-head' },
+              h('span', null, 'Today’s missions'),
+              h('span', { class: 'missions-done' }, `${doneCount}/${meta.missions.length}`),
+            ),
+            h('ul', { class: 'missions-list' }, meta.missions.map(missionRow)),
+          )
+        : null,
     );
   }
 
@@ -207,7 +246,7 @@ export class TitleScreen {
         'aria-label': name ? `Player name: ${name}. Edit` : 'Set your player name',
         onclick: () => this.startEdit(),
       },
-      name ? ['Playing as ', h('b', null, name)] : 'Set your name',
+      name ? [h('span', { class: 'name-prefix' }, 'Playing as '), h('b', null, name)] : 'Set your name',
       icon('edit', 'icon name-chip-icon'),
     );
     setChildren(this.nameSlot, chip);

@@ -16,6 +16,8 @@ export interface UIEnv {
   openSettings(): void;
   openLeaderboard(tab?: Mode): void;
   openHelp(): void;
+  openShop(): void;
+  openBadges(): void;
 }
 
 /** Element.animate that is skipped entirely under reduced motion. */

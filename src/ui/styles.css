@@ -3368,3 +3368,734 @@ html[data-input='mouse'][data-screen='run'] #game {
   animation: none !important;
   transition: none !important;
 }
+
+/* --- Phase 3: wallet, streak, missions, shop, badges, game-over rewards ------------------- */
+
+.title-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.title-id .name-slot {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.missions-slot {
+  width: 100%;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-size: 15.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meta-chip-icon.icon {
+  width: 20px;
+  height: 20px;
+}
+
+.meta-chip.is-wallet .meta-chip-icon {
+  color: var(--pk-crumb);
+}
+
+.meta-chip.is-streak {
+  border-color: rgba(255, 155, 61, 0.5);
+}
+
+.meta-chip.is-streak .meta-chip-icon {
+  color: #ff9b3d;
+}
+
+/* Alive but not yet kept today: dim, so "play to keep it" reads without words. */
+.meta-chip.is-streak.is-idle {
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+
+.meta-chip.is-streak.is-idle .meta-chip-icon {
+  color: var(--text-faint);
+}
+
+.missions-card {
+  padding: 8px 10px 10px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  text-align: left;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .missions-card {
+    background: var(--glass-solid);
+  }
+}
+
+.missions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.missions-done {
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.missions-list,
+.rw-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The row is its own progress bar: a tinted fill grows behind the text. */
+.mission {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 9px 0 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.mission-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(116, 198, 74, 0.42), rgba(166, 228, 107, 0.3));
+  transition: width 0.4s var(--ease-out);
+}
+
+.mission-medium .mission-fill {
+  background: linear-gradient(90deg, rgba(255, 194, 75, 0.4), rgba(255, 194, 75, 0.28));
+}
+
+.mission-hard .mission-fill {
+  background: linear-gradient(90deg, rgba(255, 93, 108, 0.42), rgba(255, 154, 164, 0.3));
+}
+
+.mission > :not(.mission-fill) {
+  position: relative;
+}
+
+.mission-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.38);
+}
+
+.mission.is-done .mission-check {
+  border-color: var(--leaf);
+  background: var(--leaf);
+  color: var(--leaf-ink);
+}
+
+.mission-check-icon.icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3.4;
+}
+
+.mission-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.mission.is-done .mission-text {
+  color: var(--text-dim);
+}
+
+.mission-count {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-reward {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pk-crumb);
+  font-variant-numeric: tabular-nums;
+}
+
+.mission-reward-icon.icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* Very narrow phones: the text matters more than "12/30". */
+@media (max-width: 374px) {
+  .mission-count {
+    display: none;
+  }
+}
+
+/* Shop */
+
+.shop {
+  display: grid;
+  gap: 10px;
+}
+
+.shop-wallet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shop-wallet-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.shop-note {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.shop-grid,
+.badges-grid {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shop-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 18px;
+  background: var(--fill-soft);
+  text-align: center;
+}
+
+.shop-card.is-equipped {
+  border-color: rgba(116, 198, 74, 0.7);
+  background: rgba(116, 198, 74, 0.1);
+}
+
+.shop-card.is-locked .shop-preview {
+  filter: grayscale(0.7) brightness(0.8);
+}
+
+.shop-preview {
+  position: relative;
+  width: min(100%, 92px);
+  aspect-ratio: 1;
+}
+
+.shop-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.shop-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.shop-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--text-dim);
+}
+
+.shop-card.is-equipped .shop-state {
+  color: var(--leaf-light);
+  font-weight: 600;
+}
+
+.shop-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  color: var(--pk-crumb);
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-price-icon.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-sm {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 13px;
+  font-size: 14px;
+}
+
+.btn-sm .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.shop-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Equipped keeps focus (aria-disabled, not disabled) but reads as a status, not a button. */
+.shop-btn[aria-disabled='true'] {
+  background: transparent;
+  border-color: rgba(116, 198, 74, 0.45);
+  color: var(--leaf-light);
+  box-shadow: none;
+  cursor: default;
+  transform: none;
+}
+
+.shop-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pk-crumb);
+  box-shadow: 0 0 6px var(--amber);
+  pointer-events: none;
+}
+
+/* Badges */
+
+.badges-summary {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.badges-summary b {
+  color: var(--text);
+}
+
+.badges-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.badge-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--fill-soft);
+}
+
+.badge-medal {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-faint);
+}
+
+.badge-medal .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.badge-card.is-unlocked .badge-medal {
+  background: rgba(255, 194, 75, 0.18);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 194, 75, 0.55);
+  color: var(--amber);
+}
+
+.badge-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.badge-card-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.badge-card.is-locked .badge-card-name {
+  color: var(--text-dim);
+}
+
+.badge-card-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.badge-card-reward {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pk-crumb);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge-card-reward.is-hint {
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.badge-card-reward-icon.icon {
+  width: 15px;
+  height: 15px;
+}
+
+.badge-card-skin {
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(95, 202, 185, 0.16);
+  color: #9af2e2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (min-width: 700px) {
+  .modal-badges .modal-panel {
+    max-width: 640px;
+  }
+
+  .badges-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Game over: rewards */
+
+.over-rewards {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(116, 198, 74, 0.32);
+  background: rgba(116, 198, 74, 0.12);
+  text-align: left;
+}
+
+.rw-total {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rw-total-icon.icon {
+  width: 22px;
+  height: 22px;
+  color: var(--pk-crumb);
+}
+
+.rw-total-num {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rw-total-unit {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.rw-wallet {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rw-list {
+  margin-top: 6px;
+}
+
+.rw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  animation: reward-in 0.35s var(--ease-out) both;
+  animation-delay: calc(0.55s + var(--i, 0) * 0.12s);
+}
+
+.rw-icon.icon {
+  width: 20px;
+  height: 20px;
+}
+
+.rw-row.is-mission .rw-icon {
+  color: var(--leaf-light);
+}
+
+.rw-row.is-badge .rw-icon {
+  color: var(--amber);
+}
+
+.rw-row.is-streak .rw-icon {
+  color: #ff9b3d;
+}
+
+.rw-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.15;
+}
+
+.rw-note {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rw-reward {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pk-crumb);
+  font-variant-numeric: tabular-nums;
+}
+
+.rw-reward-icon.icon {
+  width: 15px;
+  height: 15px;
+}
+
+@keyframes reward-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mission pill (in-run, non-blocking). */
+.pill-mission {
+  color: var(--leaf-light);
+  border-color: rgba(116, 198, 74, 0.55);
+}
+
+.pill-mission .pill-text {
+  color: #fff;
+}
+
+/* Phones: seven round buttons must share the top bar, and the name chip drops its
+   "Playing as" so it can sit on one line with the wallet and the streak. */
+@media (max-width: 420px) {
+  .title-top-group {
+    gap: 6px;
+  }
+
+  .name-prefix {
+    display: none;
+  }
+
+  /* With Install showing there are seven buttons across 328 px. */
+  .title-top:has(.btn-install:not([hidden])) .btn-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 340px) {
+  .title-top-group {
+    gap: 4px;
+  }
+
+  .title-top .btn-icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* Short phones (e.g. 360×640): the river's leaf needs the lower part, so the
+   title gives up its brand mark and tagline and the missions card gets slimmer. */
+@media (max-height: 680px) {
+  .title-upper {
+    gap: 8px;
+  }
+
+  .screen-home .brand-mark,
+  .screen-home .wordmark-sub {
+    display: none;
+  }
+
+  .name-prefix {
+    display: none;
+  }
+
+  .name-slot {
+    min-height: 38px;
+  }
+
+  .title-actions {
+    gap: 8px;
+  }
+
+  .btn-play {
+    min-height: 0;
+    padding-block: 8px;
+  }
+
+  .btn-play-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .daily-card {
+    min-height: 0;
+    padding-block: 8px;
+  }
+
+  .daily-badge {
+    width: 46px;
+    height: 48px;
+  }
+
+  .missions-card {
+    padding: 6px 8px 8px;
+  }
+
+  .missions-head {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+  }
+
+  .mission {
+    min-height: 26px;
+  }
+
+  .missions-list {
+    gap: 3px;
+  }
+}
+
+/* Wide screens: the title column is as tall as the window allows, so the missions
+   card moves out into the jungle gutter beside the river instead of pushing the
+   menu over the hero leaf. */
+.ui-root[data-layout='wide'] .missions-slot {
+  position: absolute;
+  top: calc(var(--safe-t) + 110px);
+  left: calc(50% + var(--u) * 200 + 28px);
+  width: min(320px, calc(var(--gw) - 56px));
+}
+
+.ui-root[data-layout='wide'] .mission {
+  min-height: 30px;
+  padding-block: 4px;
+}
+
+.ui-root[data-layout='wide'] .mission-text {
+  white-space: normal;
+}
+
+/* Landscape phones: the title is already two columns; the card goes under them. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .title-upper {
+    flex-wrap: wrap;
+  }
+
+  .missions-slot {
+    flex: 0 0 100%;
+    max-width: 420px;
+  }
+}
+
+/* Short phones: rewards earn the space the tip had, so Retry stays on screen. */
+@media (max-height: 700px) {
+  .over-panel.has-rewards .over-tip {
+    display: none;
+  }
+
+  .over-rewards {
+    margin-top: 8px;
+    padding: 6px 8px;
+  }
+
+  .rw-row {
+    padding-block: 3px;
+  }
+}

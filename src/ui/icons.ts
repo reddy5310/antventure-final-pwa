@@ -121,6 +121,16 @@ const PATHS = {
   zoneNight:
     '<path d="M19.6 14.6A8.2 8.2 0 1 1 9.4 4.4a6.6 6.6 0 0 0 10.2 10.2z"/>' +
     '<path d="M17.4 3.2v3.2M15.8 4.8H19" stroke-width="1.7"/>',
+  // --- Phase 3: meta. Flame (streak), bag (shop), medal (badges), padlock (locked).
+  flame:
+    '<path d="M12 3c.5 3.2 3.4 4.8 4.7 7.6A6 6 0 0 1 12 21a6.2 6.2 0 0 1-6.2-6.4c0-2.2 1.1-3.9 2.6-5.2.2 1.5.9 2.4 1.8 2.8C9.9 8.9 10.6 5.4 12 3z"/>' +
+    '<path d="M12 20.6c-1.6 0-2.8-1.2-2.8-2.8 0-1.4 1.1-2.4 2.8-4 1.7 1.6 2.8 2.6 2.8 4 0 1.6-1.2 2.8-2.8 2.8z" fill="currentColor" fill-opacity=".35"/>',
+  shop: '<path d="M5.5 8h13l-1 11.2a1.6 1.6 0 0 1-1.6 1.4H8.1a1.6 1.6 0 0 1-1.6-1.4z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/>',
+  medal:
+    '<circle cx="12" cy="9" r="5.6"/>' +
+    '<path d="M12 6.4l.95 1.95 2.1.3-1.5 1.5.35 2.1L12 11.2l-1.9 1 .35-2.1-1.5-1.5 2.1-.3z" fill="currentColor" fill-opacity=".3" stroke-width="1.4"/>' +
+    '<path d="M8.6 13.6L7 20.5l5-2.3 5 2.3-1.6-6.9"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.4"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

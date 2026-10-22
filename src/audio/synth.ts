@@ -526,6 +526,48 @@ export const SFX: Record<Sfx, SfxSpec> = {
     },
   },
 
+  // Shop purchase: a bright coin chime, two high bells a heartbeat apart (the
+  // second rings longer) with a breath of sparkle dust.
+  purchase: {
+    level: 0.8,
+    send: 0.3,
+    build(v) {
+      const t = v.t;
+      bell(v, t, midiToHz(88), 0.3, 0.5);
+      bell(v, t + 0.075, midiToHz(93), 0.34, 1.0);
+      shimmer(v, t + 0.06, 0.4, 0.05);
+    },
+  },
+
+  // Mission complete (mid-run, so it stays small): two plucked notes, a fourth
+  // apart, rising, with a high bell on the second.
+  mission: {
+    level: 0.75,
+    send: 0.3,
+    build(v) {
+      const t = v.t;
+      pluck(v, t, midiToHz(76), 0.3);
+      pluck(v, t + 0.11, midiToHz(81), 0.34);
+      bell(v, t + 0.11, midiToHz(93), 0.14, 0.7);
+    },
+  },
+
+  // Badge unlocked: da-da-da-DAAA. Three quick rising plucks, then a bright
+  // A major chord of bells over a warm pad that blooms and fades.
+  achievement: {
+    level: 0.85,
+    send: 0.45,
+    build(v) {
+      const t = v.t;
+      [73, 76, 81].forEach((m, i) => pluck(v, t + i * 0.1, midiToHz(m), 0.28));
+      const tc = t + 0.34;
+      [81, 85, 88].forEach((m, i) => bell(v, tc + i * 0.02, midiToHz(m), 0.26, i === 2 ? 1.5 : 1.1));
+      const lp = v.filter('lowpass', 1800, 0.5, v.out);
+      for (const m of [69, 73, 76]) softNote(v, tc, midiToHz(m), 0.12, 0.06, 0.4, 0.9, lp);
+      shimmer(v, tc, 0.6, 0.06);
+    },
+  },
+
   tap: {
     level: 0.6,
     send: 0,
