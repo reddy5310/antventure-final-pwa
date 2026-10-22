@@ -1,7 +1,7 @@
 // How to play: one illustrated card per rule, steering shown for the device
 // in use (with the others listed), plus the hotkeys.
 
-import { COMBO_CAP, COMBO_STEP } from '../../game/tuning';
+import { COMBO_CAP, COMBO_STEP, COMBO_TIME } from '../../game/tuning';
 import type { Device } from '../../types';
 import { illustration, type Illustration } from '../art';
 import { h } from '../dom';
@@ -22,17 +22,17 @@ const RULES: { ill: Illustration; title: string; text: string }[] = [
   {
     ill: 'shadows',
     title: 'Shadows mark the rain',
-    text: 'A dark circle appears where a drop will land and grows until it hits. Be outside it at impact.',
+    text: 'A shadow marks where a drop will land. When the ring closes onto it: splash! Only your ant counts — splashes on the leaf are free. A gold ring means you are inside it: move!',
   },
   {
     ill: 'near-miss',
-    title: 'Near-misses build combos',
-    text: `Dodge by a hair for bonus points. Each one grows your combo and multiplier (up to ×${MAX_MULT}) — keep chaining before it fades.`,
+    title: 'Near-misses build your chain',
+    text: `Let a splash land close to the ant for bonus points. Each one grows your chain and multiplier (up to ×${MAX_MULT}); graze again within ${COMBO_TIME} s to keep it going.`,
   },
   {
     ill: 'obstacles',
     title: 'Rocks and twigs hurt',
-    text: 'Hitting a rock or twig costs a heart. Banks are soft: bump them freely.',
+    text: 'These hit the whole leaf: bumping one costs a heart. Twigs drift, rocks don’t. Banks are soft: bump them freely.',
   },
   {
     ill: 'hearts',
@@ -50,7 +50,7 @@ const HOTKEYS: [string[], string][] = [
   [['Space', 'Enter'], 'Play / retry'],
   [['Esc'], 'Pause / back'],
   [['P'], 'Pause / resume'],
-  [['R'], 'Restart run'],
+  [['R'], 'Restart (twice once a run is going)'],
   [['M'], 'Mute'],
 ];
 

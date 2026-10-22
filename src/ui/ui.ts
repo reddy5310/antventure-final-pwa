@@ -71,6 +71,8 @@ type ScreenKind = 'title' | 'pause' | 'over' | null;
 const DEVICE_POLL_MS = 500;
 /** Main may also route the same Esc press to handleBack(); ignore the echo. */
 const BACK_ECHO_MS = 80;
+/** Side gutters at least this wide (CSS px) hold the HUD instead of the top of the river. */
+const WIDE_GUTTER_PX = 250;
 
 export class UI {
   private env: UIEnv;
@@ -209,13 +211,13 @@ export class UI {
         this.stormBanner(e.phase);
         break;
       case 'milestone':
-        this.banners.show('milestone', fmtMeters(e.meters), 'flag', 1500);
+        this.banners.show('milestone', fmtMeters(e.meters), 'flag', 1100);
         break;
       case 'new-best':
-        this.banners.show('best', 'NEW BEST!', 'crown', 2400, 'Every metre now raises the bar');
+        this.banners.show('best', 'NEW BEST!', 'crown', 1200, 'Every point now raises the bar');
         break;
       case 'hit':
-        if (e.heartsLeft === 1) this.banners.show('warn', 'Last heart!', 'heart', 1600);
+        if (e.heartsLeft === 1) this.banners.show('warn', 'Last heart!', 'heart', 1200);
         break;
       default:
         break;
@@ -224,6 +226,20 @@ export class UI {
 
   toast(text: string, opts?: ToastOptions): void {
     this.toasts.show(text, opts);
+  }
+
+  /** A run is starting: no tappable toast may sit in the steering zone. */
+  clearActionToasts(): void {
+    this.toasts.clearActions();
+  }
+
+  /**
+   * Restart requested from the pause screen (button, R, gamepad Y). Returns
+   * true when the run should restart now; false when the pause screen asked
+   * for a second press first (a long run must not vanish on one mis-tap).
+   */
+  requestRestart(): boolean {
+    return this.pauseScreen ? this.pauseScreen.requestRestart() : true;
   }
 
   setInstallAvailable(available: boolean, onInstall: () => void): void {
@@ -298,6 +314,7 @@ export class UI {
     this.unmount();
     this.screenKind = kind;
     this.root.dataset.screen = kind;
+    document.documentElement.dataset.screen = kind;
     this.screenLayer.appendChild(el);
     this.updateInert();
   }
@@ -309,6 +326,7 @@ export class UI {
     this.over = null;
     this.screenKind = null;
     this.root.dataset.screen = 'run';
+    document.documentElement.dataset.screen = 'run';
     this.screenLayer.replaceChildren();
   }
 
@@ -331,16 +349,16 @@ export class UI {
   private stormBanner(phase: World['storm']): void {
     switch (phase) {
       case 'calm':
-        this.banners.show('calm', 'Calm waters', 'calm', 1800, 'Catch your breath');
+        this.banners.show('calm', 'Calm waters', 'calm', 1100, 'Catch your breath');
         break;
       case 'drizzle':
-        this.banners.show('drizzle', 'Drizzle', 'drizzle', 1800);
+        this.banners.show('drizzle', 'Drizzle', 'drizzle', 1000);
         break;
       case 'downpour':
-        this.banners.show('downpour', 'Downpour!', 'downpour', 2000);
+        this.banners.show('downpour', 'Downpour!', 'downpour', 1100);
         break;
       case 'cloudburst':
-        this.banners.show('cloudburst', 'CLOUDBURST!', 'cloudburst', 2400, 'Hold on tight');
+        this.banners.show('cloudburst', 'CLOUDBURST!', 'cloudburst', 1200, 'Hold on tight');
         break;
     }
   }
@@ -391,6 +409,8 @@ export class UI {
     // Arrow keys reach menus even when nothing inside the overlay has focus yet
     // (e.g. after clicking the backdrop): they land on the primary action.
     window.addEventListener('keydown', (e) => {
+      // Autofill and some IMEs dispatch keydown without a key.
+      if (typeof e.key !== 'string') return;
       if (this.over && e.key !== 'Tab') this.over.skip();
       if (!e.key.startsWith('Arrow') || root.contains(document.activeElement)) return;
       if (!this.screenKind && !this.modals.isOpen) return;
@@ -410,10 +430,18 @@ export class UI {
 
     this.motionQuery?.addEventListener?.('change', () => this.syncSettings(this.ctx.getSettings()));
 
-    // CSS gets the world scale so layouts can line up with the river and the leaf.
+    // CSS gets the world scale so layouts can line up with the river and the
+    // leaf, plus the width of the jungle gutters beside it. Wide screens with
+    // room to spare move the HUD into the gutters (arcade side panels) so it
+    // can be big without covering the river.
     const setScale = () => {
-      const u = Math.min(window.innerWidth / WORLD_W, window.innerHeight / MIN_VIEW_H);
+      const w = window.innerWidth;
+      const u = Math.min(w / WORLD_W, window.innerHeight / MIN_VIEW_H);
+      const gutter = Math.max(0, (w - WORLD_W * u) / 2);
       root.style.setProperty('--u', `${u.toFixed(4)}px`);
+      root.style.setProperty('--hs', Math.min(1.45, Math.max(1, u)).toFixed(3));
+      root.style.setProperty('--gw', `${Math.floor(gutter)}px`);
+      root.dataset.layout = gutter >= WIDE_GUTTER_PX ? 'wide' : 'narrow';
     };
     setScale();
     window.addEventListener('resize', setScale, { passive: true });

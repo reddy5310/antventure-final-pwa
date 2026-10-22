@@ -113,8 +113,15 @@ export interface World {
   storm: StormPhase;
   /** 0..1 storm intensity, drives visuals and audio. */
   intensity: number;
-  /** Personal best distance (units) for this mode, 0 if none. Drawn as a flag. */
+  /**
+   * Personal best SCORE on this board, 0 if none. Score is the one competitive
+   * metric: beating it fires 'new-best' (once) and sets beatBest.
+   */
+  bestScore: number;
+  beatBest: boolean;
+  /** Farthest distance (units) reached on this board, 0 if none. Drawn as a flag on the river. */
   bestDistance: number;
+  /** The leaf has passed the farthest-distance flag (no event: the flag itself lights up). */
   passedBest: boolean;
   /** Seconds since death began (state 'dying'). */
   deathTimer: number;
@@ -177,6 +184,8 @@ export interface RunSummary {
   nearMisses: number;
   maxCombo: number;
   hitsTaken: number;
+  /** What took the last heart; null for a run that did not end in death. */
+  killedBy: HitSource | null;
 }
 
 export interface DailyInfo {

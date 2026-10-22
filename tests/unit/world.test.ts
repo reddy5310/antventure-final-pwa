@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ANT_HIT_R, LEAF_HIT_R, MAX_HEARTS, SIM_DT, UNITS_PER_METER } from '../../src/config';
 import { COMBO_TIME, INVULN_TIME, NEAR_BAND } from '../../src/game/tuning';
-import { createWorld, setViewHeight, stepWorld, summarize } from '../../src/game/world';
+import { createWorld, setDropHold, setViewHeight, stepWorld, summarize } from '../../src/game/world';
 import type { Drop, GameEvent, InputFrame, World } from '../../src/types';
 import { createDodgeBot, idle, median, runSim } from './helpers/sim';
 
@@ -200,7 +200,10 @@ describe('run flow', () => {
     expect(ev.map((e) => e.type)).toEqual(expect.arrayContaining(['hit', 'death']));
     expect(w.state).toBe('dying');
     const deathTime = w.time;
+    const deathDistance = w.distance;
     const scrollAtDeath = w.scrollSpeed;
+    // Retrying during the death animation must record the same run as waiting for game over.
+    const atDeath = summarize(w);
 
     const rest = step(w, Math.round(3 / SIM_DT), { input: { ...NONE, axis: 1 } });
     expect(rest.filter((e) => e.type === 'game-over')).toHaveLength(1);
@@ -216,6 +219,43 @@ describe('run flow', () => {
     const s = summarize(w);
     expect(s.timeS).toBeCloseTo(deathTime, 6);
     expect(s.hitsTaken).toBe(1);
+    expect(s.killedBy).toBe('drop');
+    // The river drifts on under the fallen leaf, but the run's distance stops at death.
+    expect(w.distance).toBeGreaterThan(deathDistance);
+    expect(s.distanceM).toBe(Math.floor(deathDistance / UNITS_PER_METER));
+    expect(s).toEqual(atDeath);
+  });
+
+  it('the first-run tutorial hold keeps the rain back until the player has steered', () => {
+    const w = newRun(5);
+    setDropHold(w, true);
+    let seen = 0;
+    for (let i = 0; i < Math.round(8 / SIM_DT); i++) {
+      step(w, 1);
+      seen = Math.max(seen, w.drops.length);
+    }
+    expect(seen).toBe(0);
+    setDropHold(w, false);
+    // Released: a slow, unaimed demo drop appears at once beside the leaf...
+    expect(w.drops).toHaveLength(1);
+    const demo = w.drops[0];
+    expect(demo.aimed).toBe(false);
+    expect(Math.abs(demo.x - w.player.x)).toBeGreaterThan(demo.r + ANT_HIT_R);
+    // ...and standing still, it lands as a near-miss (rocks cleared: they could knock the leaf aside).
+    const ev: GameEvent[] = [];
+    for (let i = 0; i < Math.round((demo.fall + 0.1) / SIM_DT); i++) {
+      w.obstacles.length = 0;
+      ev.push(...step(w, 1));
+    }
+    const impactAt = ev.findIndex((e) => e.type === 'drop-impact');
+    expect(impactAt).toBeGreaterThanOrEqual(0);
+    expect(ev[impactAt + 1]).toMatchObject({ type: 'near-miss', combo: 1 });
+  });
+
+  it('a live run has no cause of death', () => {
+    const w = newRun();
+    step(w, 100, { clean: true });
+    expect(summarize(w).killedBy).toBeNull();
   });
 
   it('does not spawn after death and settles leftovers', () => {
@@ -319,13 +359,32 @@ describe('scoring', () => {
     expect(w.player.wet).toBeGreaterThan(wet0);
   });
 
-  it('marks every 100 m and passes the personal best once', () => {
-    const w = newRun(3, { bestDistance: 150 * UNITS_PER_METER });
-    const ev = step(w, Math.round(110 / SIM_DT), { clean: true });
+  it('marks every 100 m and fires new-best once, when the score (not the distance) beats the best', () => {
+    // A farthest flag at 150 m and a best score of 180: at x1 the score is the
+    // metre count, so the flag is passed first and must not count as a best.
+    const w = newRun(3, { bestDistance: 150 * UNITS_PER_METER, bestScore: 180 });
+    const ev: GameEvent[] = [];
+    let flagAt = -1;
+    let bestAt = -1;
+    for (let i = 0; i < Math.round(110 / SIM_DT); i++) {
+      for (const e of step(w, 1, { clean: true })) {
+        ev.push(e);
+        if (e.type === 'new-best') bestAt = Math.floor(w.score);
+      }
+      if (w.passedBest && flagAt < 0) flagAt = Math.floor(w.distance / UNITS_PER_METER);
+    }
     const ms = ev.filter((e): e is Extract<GameEvent, { type: 'milestone' }> => e.type === 'milestone').map((e) => e.meters);
     expect(ms.slice(0, 2)).toEqual([100, 200]);
+    expect(flagAt).toBe(150);
     expect(ev.filter((e) => e.type === 'new-best')).toHaveLength(1);
-    expect(w.passedBest).toBe(true);
+    expect(bestAt).toBe(181);
+    expect(w.beatBest).toBe(true);
+
+    // Passing the farthest flag alone is not a new best.
+    const farOnly = newRun(3, { bestDistance: 50 * UNITS_PER_METER, bestScore: 1e9 });
+    expect(step(farOnly, Math.round(30 / SIM_DT), { clean: true }).filter((e) => e.type === 'new-best')).toHaveLength(0);
+    expect(farOnly.passedBest).toBe(true);
+    // No board yet: nothing to beat.
     const fresh = newRun(3);
     expect(step(fresh, Math.round(110 / SIM_DT), { clean: true }).filter((e) => e.type === 'new-best')).toHaveLength(0);
   });

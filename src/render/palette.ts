@@ -100,10 +100,15 @@ export const P = {
 export const CONFETTI = [P.gold, P.flowerPink, P.waterLight, P.flowerViolet, P.white, P.flowerCoral] as const;
 
 /** Near-miss text colours by combo tier: all light, so the dark outline always reads. */
-export const COMBO_TIERS = ['#ffffff', '#fff1a6', P.gold, '#ffad5c', '#ff86c2'] as const;
+export const COMBO_TIERS = ['#ffffff', '#fff1a6', P.gold, '#ffad5c', '#ff86c2', '#c9a2ff', '#8ff3ff'] as const;
 
-/** Combo count → tier index into COMBO_TIERS. */
+/**
+ * Combo count → tier index into COMBO_TIERS. Tiers keep climbing after the
+ * multiplier caps (combo 16) so long chains still look and feel bigger.
+ */
 export function comboTier(combo: number): number {
+  if (combo >= 40) return 6;
+  if (combo >= 30) return 5;
   if (combo >= 20) return 4;
   if (combo >= 12) return 3;
   if (combo >= 6) return 2;

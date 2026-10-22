@@ -2,6 +2,7 @@
 // River card, the player name chip and the utility icons. Laid out so the live
 // river and the hero leaf stay visible behind it (see .title-leaf-gap in CSS).
 
+import { NAME_MAX } from '../../storage';
 import type { Settings, TitleInfo } from '../../types';
 import { brandMark } from '../art';
 import { focusEl, h, setChildren } from '../dom';
@@ -9,7 +10,12 @@ import type { UIEnv } from '../env';
 import { fmtDistance, fmtInt, fmtMeters, plural } from '../format';
 import { icon } from '../icons';
 
-const NAME_MAX = 12;
+/**
+ * The input limit is in UTF-16 units; storage trims to NAME_MAX graphemes. A
+ * looser input limit keeps names in scripts with combining marks (e.g.
+ * Telugu, Devanagari) from being cut short mid-syllable while typing.
+ */
+const NAME_INPUT_MAX = NAME_MAX * 3;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** A little calendar page with today's date (the river number is in the title). */
@@ -206,7 +212,7 @@ export class TitleScreen {
       class: 'name-input',
       type: 'text',
       value: this.info.name,
-      maxlength: NAME_MAX,
+      maxlength: NAME_INPUT_MAX,
       placeholder: 'Your name',
       'aria-label': 'Player name',
       autocomplete: 'nickname',

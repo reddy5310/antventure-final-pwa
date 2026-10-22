@@ -37,8 +37,14 @@ export function makeSprite(
   return { img, w, h };
 }
 
-/** Edge-sample spacing along the river (units). */
-const STEP = 8;
+/**
+ * Edge-sample spacing along the river (units). The banks are smooth at this
+ * scale (their wobble has a ~110-unit period), and every edge layer (water,
+ * floor, mud, wet line, two foam lines) re-traces these samples, so a coarser
+ * step directly cuts per-frame path work.
+ */
+export const RIVER_STEP = 12;
+const STEP = RIVER_STEP;
 /** Edge cache size (power of two): covers far more river than any screen shows. */
 const CACHE = 1024;
 

@@ -7,7 +7,7 @@
 import { WORLD_W } from '../config';
 import type { World } from '../types';
 import type { FoliageSprites } from './foliage';
-import type { Gfx } from './gfx';
+import { RIVER_STEP, type Gfx } from './gfx';
 import { P } from './palette';
 import { TAU, frac, hash, makeRand } from './util';
 
@@ -357,7 +357,8 @@ export class Water {
     ctx.globalAlpha = 0.3;
     ctx.lineWidth = 1.6;
     ctx.setLineDash(FOAM_DASH);
-    ctx.lineDashOffset = (k0 * 8) % 13;
+    // Anchored to the river (the path starts at sample k0) so the dashes scroll with the water.
+    ctx.lineDashOffset = (k0 * RIVER_STEP) % 13;
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const w = Math.sin((k0 + i) * 0.5 + t * 1.4) * 1.6;

@@ -310,10 +310,48 @@ function retryPattern(world: World, st: SimState, dt: number): void {
   if (placePattern(world, st)) pat.retries = 0;
 }
 
+// --- Tutorial ----------------------------------------------------------------------
+
+/** The demo drop lands this far outside the ant's hit circle: inside the near-miss band. */
+const DEMO_CLEARANCE = 8;
+const DEMO_R = 18;
+/** Extra telegraph time so a first-timer can watch the ring close. */
+const DEMO_EXTRA_FALL = 0.4;
+
+/**
+ * First-run tutorial: one slow, unaimed drop beside the leaf, on the side
+ * with more water. Standing still, the ring closes and the splash lands just
+ * clear of the ant: a free near-miss that shows the whole mechanic at once.
+ * Endless only (the caller guarantees it), and it draws nothing from world.rng.
+ */
+export function spawnDemoDrop(world: World, st: SimState): void {
+  const p = world.player;
+  const centreX = p.x;
+  const fall = Math.min(PATTERN_MAX_FALL + DEMO_EXTRA_FALL, st.diff.fall + DEMO_EXTRA_FALL);
+  const e = edgesAtLanding(world, fall);
+  const off = DEMO_R + ANT_HIT_R + DEMO_CLEARANCE;
+  const first = e.right - centreX >= centreX - e.left ? 1 : -1;
+  const b = st.batch;
+  for (const side of [first, -first]) {
+    const want = centreX + side * off;
+    const x = onWater(world, want, 0, fall);
+    // Clamped by the bank: it would land closer to the ant than intended.
+    if (Math.abs(x - want) > 1) continue;
+    b.n = 0;
+    batchPush(b, x, 0, DEMO_R, 0);
+    if (batchIsEscapable(world, st, b, fall, p.x)) {
+      commitBatch(world, b, fall, false);
+      return;
+    }
+  }
+}
+
 // --- Per-step -------------------------------------------------------------------------
 
 /** Spawns singles and patterns on their timers (live runs only). */
 export function spawnDrops(world: World, st: SimState, dt: number): void {
+  // Tutorial hold: timers stay put, so the first drop comes right after release.
+  if (st.holdDrops) return;
   const diff = st.diff;
   const mods = PHASE_MODS[world.storm];
 

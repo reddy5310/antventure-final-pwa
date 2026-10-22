@@ -21,43 +21,103 @@ function dismiss(el: HTMLElement): void {
 
 export type BannerKind = 'calm' | 'drizzle' | 'downpour' | 'cloudburst' | 'milestone' | 'best' | 'warn';
 
-/** Banners in the same slot replace each other instead of stacking. */
-const SLOT: Record<BannerKind, string> = {
-  calm: 'storm',
-  drizzle: 'storm',
-  downpour: 'storm',
-  cloudburst: 'storm',
-  milestone: 'progress',
-  best: 'best',
-  warn: 'warn',
+/**
+ * One banner at a time, so they never stack over the river ahead of the leaf
+ * (where hazards come from). A more important banner replaces the current
+ * one; a less important one waits its turn and is dropped if it goes stale.
+ */
+const PRIORITY: Record<BannerKind, number> = {
+  best: 4,
+  warn: 3,
+  cloudburst: 2,
+  downpour: 2,
+  drizzle: 2,
+  calm: 2,
+  milestone: 1,
 };
-const MAX_BANNERS = 3;
+/** In-run banners stay short: the player is reading the river, not the UI. */
+const MAX_BANNER_MS = 1200;
+/** A queued banner older than this is no longer news. */
+const QUEUE_TTL_MS = 1600;
+const GAP_MS = 120;
+
+interface BannerSpec {
+  kind: BannerKind;
+  text: string;
+  iconName: IconName;
+  ms: number;
+  sub?: string;
+  at: number;
+}
 
 export class Banners {
   readonly el: HTMLElement;
+  private current: { spec: BannerSpec; el: HTMLElement; timer: number } | null = null;
+  private queue: BannerSpec[] = [];
+  private nextTimer = 0;
 
   constructor() {
     this.el = h('div', { class: 'banners', role: 'status', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   }
 
   show(kind: BannerKind, text: string, iconName: IconName, ms: number, sub?: string): void {
-    const slot = SLOT[kind];
-    for (const old of Array.from(this.el.children) as HTMLElement[]) {
-      if (old.dataset.slot === slot) old.remove();
+    const spec: BannerSpec = { kind, text, iconName, ms: Math.min(ms, MAX_BANNER_MS), sub, at: performance.now() };
+    const cur = this.current;
+    if (cur && PRIORITY[kind] < PRIORITY[cur.spec.kind]) {
+      // Same kind queued twice (e.g. two storm changes): only the newer one matters.
+      this.queue = this.queue.filter((q) => PRIORITY[q.kind] !== PRIORITY[kind]);
+      this.queue.push(spec);
+      return;
     }
-    while (this.el.children.length >= MAX_BANNERS) this.el.firstElementChild?.remove();
-    const el = h(
-      'div',
-      { class: `banner banner-${kind}`, 'data-slot': slot },
-      h('span', { class: 'banner-icon' }, icon(iconName)),
-      h('span', { class: 'banner-text' }, h('span', { class: 'banner-title' }, text), sub ? h('span', { class: 'banner-sub' }, sub) : null),
-    );
-    this.el.appendChild(el);
-    window.setTimeout(() => dismiss(el), ms);
+    this.mount(spec);
   }
 
   clear(): void {
+    if (this.current) window.clearTimeout(this.current.timer);
+    window.clearTimeout(this.nextTimer);
+    this.current = null;
+    this.queue.length = 0;
     this.el.replaceChildren();
+  }
+
+  private mount(spec: BannerSpec): void {
+    if (this.current) {
+      window.clearTimeout(this.current.timer);
+      dismiss(this.current.el);
+    }
+    window.clearTimeout(this.nextTimer);
+    const el = h(
+      'div',
+      { class: `banner banner-${spec.kind}` },
+      h('span', { class: 'banner-icon' }, icon(spec.iconName)),
+      h(
+        'span',
+        { class: 'banner-text' },
+        h('span', { class: 'banner-title' }, spec.text),
+        spec.sub ? h('span', { class: 'banner-sub' }, spec.sub) : null,
+      ),
+    );
+    this.el.appendChild(el);
+    const timer = window.setTimeout(() => this.finish(el), spec.ms);
+    this.current = { spec, el, timer };
+  }
+
+  private finish(el: HTMLElement): void {
+    if (this.current?.el !== el) return;
+    dismiss(el);
+    this.current = null;
+    const now = performance.now();
+    this.queue = this.queue.filter((q) => now - q.at < QUEUE_TTL_MS);
+    if (!this.queue.length) return;
+    let best = 0;
+    for (let i = 1; i < this.queue.length; i++) {
+      if (PRIORITY[this.queue[i].kind] > PRIORITY[this.queue[best].kind]) best = i;
+    }
+    const [next] = this.queue.splice(best, 1);
+    // A beat between banners so two messages never read as one.
+    this.nextTimer = window.setTimeout(() => {
+      if (!this.current) this.mount(next);
+    }, GAP_MS);
   }
 }
 
@@ -99,6 +159,11 @@ export class Toasts {
     this.el.appendChild(el);
     const ms = opts.ms ?? (opts.actionLabel ? 8000 : 2400);
     window.setTimeout(() => dismiss(el), ms);
+  }
+
+  /** Remove toasts with buttons (a run is starting: nothing tappable may sit in the steering zone). */
+  clearActions(): void {
+    for (const el of Array.from(this.el.querySelectorAll<HTMLElement>('.toast.has-action'))) el.remove();
   }
 }
 
@@ -223,8 +288,8 @@ export class Tutorial {
         h(
           'div',
           { class: 'tut-copy' },
-          h('p', { class: 'tut-title' }, 'Dark circles show where rain lands'),
-          h('p', { class: 'tut-sub' }, 'Stay out! Dodge close for combo points'),
+          h('p', { class: 'tut-title' }, 'Shadows show where rain will land'),
+          h('p', { class: 'tut-sub' }, 'Only the ant counts. Gold ring? Move! Graze close for points'),
         ),
       );
     }

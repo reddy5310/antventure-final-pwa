@@ -501,7 +501,7 @@ export class Effects {
     }
     this.tcol[i] = col;
     this.ta[i] = `+${Math.round(this.tpts[i])}`;
-    this.tb[i] = mult > 1 ? `×${Number.isInteger(mult) ? mult : mult.toFixed(1)}` : '';
+    this.tb[i] = mult > 1 ? multLabel(mult) : '';
     const m = this.measure;
     if (m && this.tb[i]) {
       m.font = NEAR_MISS_FONT;
@@ -514,4 +514,15 @@ export class Effects {
       this.taw[i] = 0;
     }
   }
+}
+
+/** "×2.25": the same text as the HUD (fmtMult), cached since the multiplier has only a handful of values. */
+const multLabels = new Map<number, string>();
+function multLabel(mult: number): string {
+  let s = multLabels.get(mult);
+  if (s === undefined) {
+    s = `×${Math.round(mult * 100) / 100}`;
+    multLabels.set(mult, s);
+  }
+  return s;
 }

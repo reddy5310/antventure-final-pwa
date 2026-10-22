@@ -74,6 +74,12 @@ export default defineConfig({
             icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
           },
         ],
+        // Richer install dialog (Chrome / Android). Not precached: only the install UI shows them.
+        screenshots: [
+          { src: 'screenshots/title-narrow.jpg', sizes: '540x1170', type: 'image/jpeg', form_factor: 'narrow', label: 'Title screen with the Daily River' },
+          { src: 'screenshots/run-narrow.jpg', sizes: '540x1170', type: 'image/jpeg', form_factor: 'narrow', label: 'Dodging raindrops for a near-miss combo' },
+          { src: 'screenshots/run-wide.jpg', sizes: '1280x800', type: 'image/jpeg', form_factor: 'wide', label: 'Desktop play with the side-panel HUD' },
+        ],
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -87,8 +93,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,mp3}'],
         globIgnores: [
           '**/node_modules/**',
-          // Only social crawlers fetch the share card.
+          // Only social crawlers fetch the share card; only the install dialog shows the screenshots.
           'og-image.png',
+          'screenshots/**',
           // v1 migration helpers: they run as workers, never as page assets.
           'service-worker.js',
           'sw-legacy-cleanup.js',

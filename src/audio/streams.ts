@@ -1,17 +1,57 @@
 // The two recorded streams: background music and rain ambience. Both are
 // decoded into AudioBuffers (gapless, works from the service-worker cache).
+//
+// Decoded audio is 32-bit float per sample: the 3.5-minute music track at the
+// device's 44.1/48 kHz is ~75-80 MB. decodeAudioData resamples to the rate of
+// the context that decodes, so decoding through an OfflineAudioContext at a
+// lower rate shrinks the buffer, and any context can still play it (the
+// source node resamples on the fly). The rain is always heard through a
+// lowpass at or below 7 kHz, so 16 kHz loses nothing; the music keeps 12 kHz
+// of bandwidth at 24 kHz.
 
 import { findLoopPoints, type LoopPoints } from './loop-points';
 
-export async function loadBuffer(ctx: BaseAudioContext, url: string): Promise<AudioBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  const data = await res.arrayBuffer();
+/** Decode rates (Hz) for the two streams. */
+export const MUSIC_RATE = 24000;
+export const RAIN_RATE = 16000;
+
+type OfflineCtor = new (channels: number, length: number, sampleRate: number) => BaseAudioContext;
+
+/** A throwaway decoder at `rate`, or null where the browser refuses that rate. */
+function decoderAt(rate: number): BaseAudioContext | null {
+  const w = window as unknown as { OfflineAudioContext?: OfflineCtor; webkitOfflineAudioContext?: OfflineCtor };
+  const Ctor = w.OfflineAudioContext ?? w.webkitOfflineAudioContext;
+  if (!Ctor) return null;
+  try {
+    return new Ctor(1, 1, rate);
+  } catch {
+    return null;
+  }
+}
+
+function decode(ctx: BaseAudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
   return new Promise<AudioBuffer>((resolve, reject) => {
     // Callback form too: older Safari never resolves the promise form.
     const p = ctx.decodeAudioData(data, resolve, reject) as Promise<AudioBuffer> | undefined;
     p?.then(resolve, reject);
   });
+}
+
+/** Fetches and decodes `url`, at `rate` Hz when given and supported (else at the context's rate). */
+export async function loadBuffer(ctx: BaseAudioContext, url: string, rate?: number): Promise<AudioBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  const data = await res.arrayBuffer();
+  const small = rate && rate < ctx.sampleRate ? decoderAt(rate) : null;
+  if (small) {
+    try {
+      // decodeAudioData detaches its input: keep the original for the fallback.
+      return await decode(small, data.slice(0));
+    } catch {
+      // Some engines only decode at their own rates: fall through.
+    }
+  }
+  return decode(ctx, data);
 }
 
 export function analyseLoop(buf: AudioBuffer): LoopPoints {

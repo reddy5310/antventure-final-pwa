@@ -1,6 +1,7 @@
-// Competitive markers drawn in the world: the personal-best flag (a pennant on
-// the bank plus a dashed line across the water at the best distance) and a
-// little signpost every 100 m.
+// Competitive markers drawn in the world: the farthest-run flag (a pennant on
+// the bank plus a dashed line across the water where your farthest run on
+// this board ended) and a little signpost every 100 m. "Best" is reserved for
+// score, so the flag is labelled as the distance record it is.
 
 import { UNITS_PER_METER, WORLD_W } from '../config';
 import type { World } from '../types';
@@ -14,6 +15,7 @@ const NO_DASH: number[] = [];
 const LABEL_FONT = `700 10px ${FONT_FAMILY}`;
 const SMALL_FONT = `600 9px ${FONT_FAMILY}`;
 const SIGN_FONT = `700 8.5px ${FONT_FAMILY}`;
+const FLAG_LABEL = 'FARTHEST';
 
 export class FlagArt {
   private glow: Sprite | null = null;
@@ -40,7 +42,7 @@ export class FlagArt {
     const passed = world.passedBest || world.distance >= world.bestDistance;
     if (this.bestFor !== world.bestDistance) {
       this.bestFor = world.bestDistance;
-      this.bestText = `${Math.floor(world.bestDistance / UNITS_PER_METER)} m`;
+      this.bestText = `${Math.floor(world.bestDistance / UNITS_PER_METER)}m`;
     }
     const l = g.leftAt(y);
     const r = g.rightAt(y);
@@ -73,16 +75,16 @@ export class FlagArt {
     ctx.setLineDash(NO_DASH);
     ctx.globalAlpha = 1;
 
-    // Distance label on the water by the left bank.
+    // What the line means, on the water by the left bank.
     ctx.font = SMALL_FONT;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = P.ink;
     ctx.lineWidth = 3;
-    ctx.strokeText(this.bestText, l + 8, y - 4);
+    ctx.strokeText(FLAG_LABEL, l + 8, y - 4);
     ctx.fillStyle = P.goldLight;
-    ctx.fillText(this.bestText, l + 8, y - 4);
+    ctx.fillText(FLAG_LABEL, l + 8, y - 4);
 
     // Pole.
     ctx.lineCap = 'round';
@@ -113,7 +115,7 @@ export class FlagArt {
     ctx.font = LABEL_FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('BEST', pole - 21, top + 9 + w1 * 0.6);
+    ctx.fillText(this.bestText, pole - 22, top + 9 + w1 * 0.6);
     ctx.fillStyle = P.gold;
     ctx.beginPath();
     ctx.arc(pole, top - 2, 2.4, 0, TAU);

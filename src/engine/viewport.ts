@@ -27,6 +27,11 @@ export interface Viewport {
   originX: number;
   /** Safe-area insets in CSS px (notches, home indicator). */
   safe: Insets;
+  /**
+   * Lowers (or lifts) an extra cap on the backing-store density, e.g. from the
+   * adaptive quality governor. Re-measures and notifies like a resize.
+   */
+  setDprCap(cap: number): void;
 }
 
 /**
@@ -36,6 +41,19 @@ export interface Viewport {
  * which is what keeps mid-range phones at 60 fps. The DOM UI stays native-sharp.
  */
 const MAX_DPR = 2;
+/**
+ * Backing-store pixel budget. Cost scales with pixels, and a large desktop or
+ * tablet screen at 2x would be 5-13 MP for every full-screen pass while most of
+ * it is decorative jungle. ~2.7 phone screens' worth keeps every device sharp
+ * enough for this flat art.
+ */
+const PIXEL_BUDGET = 3.5e6;
+
+/** Density for a CSS size: device ratio, capped by MAX_DPR, the pixel budget and `cap`, never below 1. */
+export function pickDpr(cssW: number, cssH: number, deviceRatio: number, cap = Infinity): number {
+  const budget = Math.sqrt(PIXEL_BUDGET / Math.max(1, cssW * cssH));
+  return Math.max(1, Math.min(deviceRatio || 1, MAX_DPR, budget, cap));
+}
 
 function readSafeInsets(probe: HTMLElement): Insets {
   const cs = getComputedStyle(probe);
@@ -56,6 +74,7 @@ export function createViewport(canvas: HTMLCanvasElement, onChange: (v: Viewport
     'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);';
   document.body.appendChild(probe);
 
+  let dprCap = Infinity;
   const v: Viewport = {
     cssW: 0,
     cssH: 0,
@@ -65,12 +84,16 @@ export function createViewport(canvas: HTMLCanvasElement, onChange: (v: Viewport
     viewH: MIN_VIEW_H,
     originX: 0,
     safe: { top: 0, right: 0, bottom: 0, left: 0 },
+    setDprCap(cap: number) {
+      dprCap = cap > 0 ? cap : Infinity;
+      schedule();
+    },
   };
 
   const measure = () => {
     const cssW = Math.max(1, window.innerWidth);
     const cssH = Math.max(1, window.innerHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    const dpr = pickDpr(cssW, cssH, window.devicePixelRatio || 1, dprCap);
     const scale = Math.min(cssW / WORLD_W, cssH / MIN_VIEW_H);
     v.cssW = cssW;
     v.cssH = cssH;
@@ -97,9 +120,32 @@ export function createViewport(canvas: HTMLCanvasElement, onChange: (v: Viewport
   window.addEventListener('resize', schedule);
   window.addEventListener('orientationchange', schedule);
   window.visualViewport?.addEventListener('resize', schedule);
+  watchPixelRatio(schedule);
 
   measure();
   return v;
+}
+
+/**
+ * Moving a window to a screen with another pixel ratio fires no resize event;
+ * a resolution media query for the current ratio does change. Re-armed for
+ * each new ratio.
+ */
+function watchPixelRatio(onChange: () => void): void {
+  let mq: MediaQueryList;
+  try {
+    mq = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  } catch {
+    return;
+  }
+  mq.addEventListener?.(
+    'change',
+    () => {
+      onChange();
+      watchPixelRatio(onChange);
+    },
+    { once: true },
+  );
 }
 
 /** World x → CSS px. */

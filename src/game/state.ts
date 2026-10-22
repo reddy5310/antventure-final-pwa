@@ -3,7 +3,7 @@
 // a WeakMap so the shared World contract stays small.
 
 import { createRng, type Rng } from '../engine/rng';
-import type { World } from '../types';
+import type { HitSource, World } from '../types';
 import { createDifficulty, type Difficulty } from './difficulty';
 import type { SteerCore } from './player';
 import { FIRST_OBSTACLE_D, MAX_DROPS } from './tuning';
@@ -44,6 +44,12 @@ export interface SimState {
   deathScroll: number;
   /** world.time when the ant died (summaries report survival time). */
   deathTime: number;
+  /** world.distance when the ant died: the river drifts on during the death animation, the run doesn't. */
+  deathDistance: number;
+  /** What took the last heart. */
+  killedBy: HitSource | null;
+  /** First-run tutorial: no drops until the player has learned to steer. */
+  holdDrops: boolean;
   gameOverSent: boolean;
   autopilotT: number;
   batch: DropBatch;
@@ -86,6 +92,9 @@ function createSimState(world: World): SimState {
     lastMilestone: 0,
     deathScroll: 0,
     deathTime: 0,
+    deathDistance: 0,
+    killedBy: null,
+    holdDrops: false,
     gameOverSent: false,
     autopilotT: 0,
     batch: {

@@ -6,7 +6,7 @@ import { MAX_HEARTS, PLAYER_FROM_BOTTOM, UNITS_PER_METER } from '../config';
 import { createRng } from '../engine/rng';
 import type { InputFrame, Mode, RunSummary, World } from '../types';
 import { difficultyAt } from './difficulty';
-import { spawnDrops, updateDrops } from './drops';
+import { spawnDemoDrop, spawnDrops, updateDrops } from './drops';
 import { layoutObstacles, updateObstacles } from './obstacles';
 import { autopilot, driftPlayer, steerPlayer } from './player';
 import { riverEdgesAt } from './river';
@@ -21,8 +21,10 @@ export interface CreateWorldOptions {
   mode: Mode;
   seed: number;
   dailyId: string | null;
-  /** Personal best distance in world units (0 if none) — drawn as a flag. */
+  /** Farthest distance on this board in world units (0 if none) — drawn as a flag. */
   bestDistance: number;
+  /** Best score on this board (0 if none): beating it is the run's 'new-best'. */
+  bestScore?: number;
   viewH: number;
   /** Menu backdrop: river scrolls, no hazards, no damage. */
   attract?: boolean;
@@ -54,6 +56,8 @@ export function createWorld(opts: CreateWorldOptions): World {
     hitsTaken: 0,
     storm: 'calm',
     intensity: 0,
+    bestScore: Math.max(0, Math.floor(opts.bestScore ?? 0)),
+    beatBest: false,
     bestDistance: opts.bestDistance,
     passedBest: false,
     deathTimer: 0,
@@ -173,18 +177,34 @@ export function setViewHeight(world: World, viewH: number): void {
   for (const o of world.obstacles) o.y += dy;
 }
 
+/**
+ * First-run tutorial: hold back raindrops (true) until the player has steered.
+ * Patterns are still locked that early, so only the single-drop clock waits.
+ */
+export function setDropHold(world: World, hold: boolean): void {
+  const st = simState(world);
+  const release = st.holdDrops && !hold;
+  st.holdDrops = hold;
+  // The first drop after the hold is a slow demo beside the leaf, so the hint
+  // that appears now explains something the player can watch.
+  if (release && world.state === 'running') spawnDemoDrop(world, st);
+}
+
 export function summarize(world: World): RunSummary {
   const st = simState(world);
+  // Frozen at the moment of death, so retrying during the death animation
+  // records exactly what waiting for the game-over screen would.
   const ended = world.state === 'dying' || world.state === 'over';
   return {
     mode: world.mode,
     dailyId: world.dailyId,
     seed: world.seed,
     score: Math.floor(world.score),
-    distanceM: Math.floor(world.distance / UNITS_PER_METER),
+    distanceM: Math.floor((ended ? st.deathDistance : world.distance) / UNITS_PER_METER),
     timeS: ended ? st.deathTime : world.time,
     nearMisses: world.nearMisses,
     maxCombo: world.maxCombo,
     hitsTaken: world.hitsTaken,
+    killedBy: ended ? st.killedBy : null,
   };
 }

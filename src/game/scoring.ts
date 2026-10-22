@@ -41,15 +41,23 @@ export function updateCombo(world: World, dt: number): void {
   if (world.comboTimer <= 0) breakCombo(world);
 }
 
-/** Milestones every MILESTONE_M metres and the one-off personal-best crossing. */
+/**
+ * Milestones every MILESTONE_M metres, the one-off personal-best moment and
+ * the farthest-distance flag. "Best" always means score, the metric the boards
+ * rank by; score never decreases within a run, so the live crossing is exact
+ * and agrees with the game-over verdict. The distance flag is only a marker.
+ */
 export function checkProgress(world: World, st: SimState): void {
   const m = Math.floor(world.distance / (MILESTONE_M * UNITS_PER_METER));
   if (m > st.lastMilestone) {
     st.lastMilestone = m;
     world.events.push({ type: 'milestone', meters: m * MILESTONE_M });
   }
+  if (!world.beatBest && world.bestScore > 0 && Math.floor(world.score) > world.bestScore) {
+    world.beatBest = true;
+    world.events.push({ type: 'new-best' });
+  }
   if (!world.passedBest && world.bestDistance > 0 && world.distance > world.bestDistance) {
     world.passedBest = true;
-    world.events.push({ type: 'new-best' });
   }
 }

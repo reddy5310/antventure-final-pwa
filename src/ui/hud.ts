@@ -3,8 +3,14 @@
 // text goes through pre-made Text nodes (no innerHTML), the combo timer
 // through a transform (compositor only), and animations through WAAPI (no
 // forced reflow to restart CSS animations).
+//
+// The bar's four groups (hearts, chips, centre, controls) are direct grid
+// children, so CSS can lay them out across the top on phones or into the side
+// gutters on wide screens without touching this code.
 
 import { MAX_HEARTS, UNITS_PER_METER } from '../config';
+// Shared with the canvas near-miss text so both heat up at the same chain lengths.
+import { comboTier } from '../render/palette';
 import type { GameEvent, World } from '../types';
 import { heartSvg } from './art';
 import { h } from './dom';
@@ -15,8 +21,11 @@ import { icon } from './icons';
 /** Combo timer bar resolution: 200 steps is smoother than the eye needs. */
 const BAR_STEPS = 200;
 const SCALE_X: string[] = Array.from({ length: BAR_STEPS + 1 }, (_, i) => `scaleX(${i / BAR_STEPS})`);
-/** Switch the best readout to a countdown inside this many metres. */
-const CLOSE_TO_BEST_M = 100;
+/** The best chip turns urgent inside this many points (or this share of the best). */
+const CLOSE_TO_BEST_PTS = 150;
+const CLOSE_TO_BEST_SHARE = 0.15;
+/** How long a broken chain stays on the meter. */
+const LOST_MS = 1100;
 
 const SHAKE: Keyframe[] = [
   { transform: 'translateX(0)' },
@@ -46,16 +55,7 @@ const BREAK_OPTS: KeyframeAnimationOptions = { duration: 520, easing: 'cubic-bez
 const PULSE_OPTS: KeyframeAnimationOptions = { duration: 220, easing: 'ease-out' };
 const POP_OPTS: KeyframeAnimationOptions = { duration: 260, easing: 'cubic-bezier(.34,1.56,.64,1)' };
 
-type BestState = 'none' | 'ahead' | 'close' | 'passed';
-
-/** Combo → visual heat tier (same thresholds as the canvas near-miss text). */
-function comboTier(combo: number): number {
-  if (combo >= 20) return 4;
-  if (combo >= 12) return 3;
-  if (combo >= 6) return 2;
-  if (combo >= 2) return 1;
-  return 0;
-}
+type BestState = 'none' | 'chase' | 'close' | 'beat';
 
 export class Hud {
   readonly el: HTMLElement;
@@ -68,14 +68,15 @@ export class Hud {
   private comboEl: HTMLElement;
   private multEl: HTMLElement;
   private multText = document.createTextNode('×1');
+  private chainText = document.createTextNode('');
   private comboFill: HTMLElement;
-  private comboLostEl: HTMLElement;
   private distText = document.createTextNode('0 m');
   private bestEl: HTMLElement;
   private bestText = document.createTextNode('');
   private fpsEl: HTMLElement;
   private fpsText = document.createTextNode('');
-  private comboLostTimer = 0;
+  private lostTimer = 0;
+  private lost = false;
 
   // Last values written to the DOM.
   private hearts = -1;
@@ -91,6 +92,7 @@ export class Hud {
   private bestNum = -1;
   private fps = -1;
   private showFps: boolean | null = null;
+  private canPause: boolean | null = null;
 
   constructor(private env: UIEnv) {
     for (let i = 0; i < MAX_HEARTS; i++) {
@@ -98,11 +100,15 @@ export class Hud {
     }
     this.heartsEl = h('div', { class: 'hearts', role: 'img', 'aria-label': 'Hearts' }, this.heartEls);
 
-    this.bestEl = h('div', { class: 'hud-chip hud-best', 'data-state': 'none' }, icon('flag', 'icon hud-chip-icon'), h('span', null, this.bestText));
-    const left = h(
+    this.bestEl = h(
       'div',
-      { class: 'hud-left' },
-      this.heartsEl,
+      { class: 'hud-chip hud-best', 'data-state': 'none', title: 'Your best score on this board' },
+      icon('crown', 'icon hud-chip-icon'),
+      h('span', null, this.bestText),
+    );
+    const chips = h(
+      'div',
+      { class: 'hud-chips' },
       h('div', { class: 'hud-chip hud-dist' }, icon('up', 'icon hud-chip-icon'), h('span', null, this.distText)),
       this.bestEl,
     );
@@ -110,9 +116,14 @@ export class Hud {
     this.scoreEl = h('div', { class: 'hud-score' }, this.scoreText);
     this.multEl = h('span', { class: 'hud-mult' }, this.multText);
     this.comboFill = h('span', { class: 'combo-fill' });
-    this.comboEl = h('div', { class: 'hud-combo', 'data-tier': '0' }, this.multEl, h('span', { class: 'combo-track' }, this.comboFill));
-    this.comboLostEl = h('div', { class: 'combo-lost', 'aria-hidden': 'true' }, 'Combo lost');
-    const center = h('div', { class: 'hud-center' }, this.scoreEl, this.comboEl, this.comboLostEl);
+    this.comboEl = h(
+      'div',
+      { class: 'hud-combo', 'data-tier': '0' },
+      this.multEl,
+      h('span', { class: 'combo-track' }, this.comboFill),
+      h('span', { class: 'hud-chain' }, this.chainText),
+    );
+    const center = h('div', { class: 'hud-center' }, h('span', { class: 'hud-score-label' }, 'Score'), this.scoreEl, this.comboEl);
 
     this.pauseBtn = h(
       'button',
@@ -128,7 +139,7 @@ export class Hud {
     this.fpsEl = h('div', { class: 'hud-fps', hidden: true }, this.fpsText);
     const right = h('div', { class: 'hud-right' }, this.pauseBtn, this.fpsEl);
 
-    this.el = h('div', { class: 'hud', hidden: true }, h('div', { class: 'hud-bar' }, left, center, right));
+    this.el = h('div', { class: 'hud', hidden: true }, h('div', { class: 'hud-bar' }, this.heartsEl, chips, center, right));
   }
 
   /** Forget cached values so the next update rewrites everything (new run). */
@@ -146,8 +157,8 @@ export class Hud {
     this.bestNum = -1;
     this.fps = -1;
     this.showFps = null;
-    this.comboLostEl.classList.remove('is-on');
-    window.clearTimeout(this.comboLostTimer);
+    this.canPause = null;
+    this.endLost();
   }
 
   update(w: World, fps: number, showFps: boolean): void {
@@ -171,9 +182,14 @@ export class Hud {
       // The timer refills whenever the combo grows: remember that length as 100%.
       if (combo > this.combo) this.comboMax = Math.max(w.comboTimer, 0.001);
       this.combo = combo;
-      this.comboEl.classList.toggle('is-on', combo > 0);
+      if (combo > 0) {
+        // A fresh graze ends the "lost" flash at once.
+        if (this.lost) this.endLost();
+        this.chainText.data = `${fmtInt(combo)} chain`;
+      }
+      this.comboEl.classList.toggle('is-on', combo > 0 || this.lost);
       const tier = comboTier(combo);
-      if (tier !== this.tier) {
+      if (tier !== this.tier && !this.lost) {
         this.tier = tier;
         this.comboEl.dataset.tier = String(tier);
       }
@@ -187,7 +203,8 @@ export class Hud {
       }
     }
 
-    if (w.multiplier !== this.mult) {
+    // While the broken chain is on show the pill says so; the real multiplier returns after.
+    if (!this.lost && w.multiplier !== this.mult) {
       this.mult = w.multiplier;
       this.multText.data = fmtMult(w.multiplier);
     }
@@ -197,7 +214,14 @@ export class Hud {
       this.meters = meters;
       this.distText.data = fmtMeters(meters);
     }
-    this.updateBest(w, meters);
+    this.updateBest(w, score);
+
+    const canPause = w.state === 'running';
+    if (canPause !== this.canPause) {
+      // Nothing to pause once the ant is down: the game-over screen is a second away.
+      this.canPause = canPause;
+      this.pauseBtn.disabled = !canPause;
+    }
 
     if (showFps !== this.showFps) {
       this.showFps = showFps;
@@ -223,16 +247,36 @@ export class Hud {
         animate(this.env, this.multEl, POP, POP_OPTS);
         break;
       case 'combo-lost':
-        this.comboLostEl.textContent = `×${e.combo} combo lost`;
-        this.comboLostEl.classList.add('is-on');
-        // WAAPI restarts the pop every time without forcing a reflow.
-        animate(this.env, this.comboLostEl, POP, POP_OPTS);
-        window.clearTimeout(this.comboLostTimer);
-        this.comboLostTimer = window.setTimeout(() => this.comboLostEl.classList.remove('is-on'), 1100);
+        this.showLost(e.combo);
         break;
       default:
         break;
     }
+  }
+
+  /** The chain just broke: the meter itself says so (no extra pill over the river). */
+  private showLost(chain: number): void {
+    window.clearTimeout(this.lostTimer);
+    this.lost = true;
+    this.multText.data = 'Lost';
+    this.chainText.data = `${fmtInt(chain)} chain`;
+    this.comboFill.style.transform = SCALE_X[0];
+    this.comboStep = 0;
+    this.comboEl.classList.add('is-on', 'is-lost');
+    animate(this.env, this.comboEl, POP, POP_OPTS);
+    this.lostTimer = window.setTimeout(() => {
+      this.endLost();
+      this.comboEl.classList.toggle('is-on', this.combo > 0);
+    }, LOST_MS);
+  }
+
+  private endLost(): void {
+    window.clearTimeout(this.lostTimer);
+    this.lost = false;
+    this.comboEl.classList.remove('is-lost');
+    // Force the next update to rewrite the multiplier and tier.
+    this.mult = -1;
+    this.tier = -1;
   }
 
   private setHearts(hearts: number): void {
@@ -250,21 +294,16 @@ export class Hud {
     this.heartsEl.setAttribute('aria-label', `${hearts} of ${MAX_HEARTS} hearts`);
   }
 
-  private updateBest(w: World, meters: number): void {
+  /** Score pace against the board's best score: the same metric the boards rank by. */
+  private updateBest(w: World, score: number): void {
     let state: BestState;
     let num = 0;
-    if (w.bestDistance <= 0) state = 'none';
-    else if (w.passedBest) state = 'passed';
+    if (w.bestScore <= 0) state = 'none';
+    else if (w.beatBest) state = 'beat';
     else {
-      const bestM = Math.floor(w.bestDistance / UNITS_PER_METER);
-      const togo = Math.max(0, bestM - meters);
-      if (togo <= CLOSE_TO_BEST_M) {
-        state = 'close';
-        num = togo;
-      } else {
-        state = 'ahead';
-        num = bestM;
-      }
+      // Points still needed to strictly beat the best.
+      num = Math.max(1, w.bestScore - score + 1);
+      state = num <= Math.max(CLOSE_TO_BEST_PTS, w.bestScore * CLOSE_TO_BEST_SHARE) ? 'close' : 'chase';
     }
     if (state === this.best && num === this.bestNum) return;
     const stateChanged = state !== this.best;
@@ -272,16 +311,14 @@ export class Hud {
     this.bestNum = num;
     if (stateChanged) {
       this.bestEl.dataset.state = state;
-      if (state === 'passed') animate(this.env, this.bestEl, POP, POP_OPTS);
+      if (state === 'beat') animate(this.env, this.bestEl, POP, POP_OPTS);
     }
     switch (state) {
-      case 'ahead':
-        this.bestText.data = `Best ${fmtMeters(num)}`;
-        break;
+      case 'chase':
       case 'close':
-        this.bestText.data = `${fmtMeters(num)} to best`;
+        this.bestText.data = `${fmtInt(num)} to beat`;
         break;
-      case 'passed':
+      case 'beat':
         this.bestText.data = 'NEW BEST';
         break;
       case 'none':

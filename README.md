@@ -43,11 +43,14 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
 - **A storm that builds.** The storm moves from calm to drizzle, then
   downpour, then cloudburst. Rocks, drifting twigs, a narrowing river and
   faster rain ramp the difficulty over about three minutes.
-- **Competitive loop.** A flag on the river marks your personal best. You
-  get local top-10 boards, your rank on the game-over screen, and instant
-  retry with one key or tap.
+- **Competitive loop.** Score is the one metric: the HUD counts down the
+  points still needed to beat your best, and "NEW BEST" fires the moment you
+  do. A flag on the river marks where your farthest run ended. You get local
+  top-10 boards, your rank and the cause of death (with a tip) on the
+  game-over screen, and instant retry with one key or tap.
 - **Daily River.** The same seeded river for everyone today ("Daily River
-  #N"), with its own board, attempt counter and a share card.
+  #N"), with its own board, attempt counter and a generated share card whose
+  link opens today's river directly.
 - **Every input.** Play with touch (drag anywhere, so your thumb never covers
   the ant), mouse, keyboard or gamepad, with hotkeys for everything.
 - **Fair and smooth.** A 120 Hz fixed-step simulation keeps runs identical on
@@ -59,7 +62,7 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
   and shape rather than colour alone. It has haptics, separate music and
   effects volumes, and adjustable touch sensitivity.
 - **Installable PWA.** It works offline after the first visit. Updates
-  arrive with an "Update" prompt and never reload mid-run.
+  arrive with an "Update" prompt on the title screen, never during a run.
 
 ## Controls
 
@@ -70,7 +73,10 @@ _Coming soon. Screenshots will live in `docs/screenshots/`._
 | **Keyboard** | `←` `→` or `A` `D` | `Space` / `Enter` | `Esc` / `P` | `R` | `M` |
 | **Gamepad** | Left stick / D-pad | `A` | `Start` (`B` backs out) | `Y` | `Select` |
 
-`R` restarts instantly at any point in a run, and from the game-over screen.
+`R` restarts instantly from the game-over screen, during the sinking
+animation and in the first 15 s of a run. Later in a run it pauses and asks
+for a second press (the pause screen's **Restart** button does the same), so
+a long run never vanishes on one stray key or tap.
 Outside a run, `P` / `Start` work as a "go" button: they start a run from the
 title and retry from the game-over screen. `Esc` / `B` step back (close a
 dialog, pause, or leave the game-over screen for the title). A run that has
@@ -97,7 +103,7 @@ score = metres × multiplier  +  near-miss bonuses
 - **Near-miss:** a splash that lands just outside the ant scores **+25 × multiplier** and adds 1 to the combo.
 - **Multiplier:** x1, plus 0.25 per combo step, capped at **x5**. The combo fades after 3.5 s without a near-miss, and any hit breaks it.
 - **Hearts:** you have 3. A splash, rock or twig costs one, then you get 1.6 s of invulnerability. Lose the last one and the run ends.
-- **Milestones:** a cue every 100 m, and a fanfare when you pass your personal-best flag.
+- **Milestones:** a cue every 100 m, and a fanfare when your score passes your best.
 
 ## Install as an app
 

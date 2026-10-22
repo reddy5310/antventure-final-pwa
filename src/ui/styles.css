@@ -37,6 +37,11 @@ body {
   outline: none;
 }
 
+/* Mouse steering: the pointer would sit on the river right over the telegraphs. */
+html[data-input='mouse'][data-screen='run'] #game {
+  cursor: none;
+}
+
 /* --- Tokens ---------------------------------------------------------------- */
 
 .ui-root {
@@ -86,6 +91,10 @@ body {
   --gutter: 16px;
   /* CSS px per world unit (set from JS, same formula as the viewport). */
   --u: 1px;
+  /* HUD scale (set from JS): 1 on phones, growing with the river on tablets and big windows. */
+  --hs: 1;
+  /* Width of each jungle gutter beside the river (set from JS). */
+  --gw: 0px;
 
   position: fixed;
   inset: 0;
@@ -447,7 +456,7 @@ body {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.15;
   color: var(--text-dim);
   text-align: center;
@@ -464,6 +473,13 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* Restart armed: one more press throws the run away. */
+.btn-restart.is-armed {
+  background: var(--coral-deep);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px var(--coral);
 }
 
 .key-hints {
@@ -757,7 +773,7 @@ body {
   padding: 3px 0 2px;
   background: linear-gradient(180deg, #ffd977, var(--amber-deep));
   color: var(--amber-ink);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.1em;
@@ -870,23 +886,22 @@ body {
   left: 50%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'hearts center right'
+    'chips center right';
   align-items: start;
-  gap: 8px;
-  width: min(100%, calc(var(--u) * 400 + 180px));
+  column-gap: 8px;
+  row-gap: 5px;
+  width: min(100%, calc(var(--u) * 400 + 180px * var(--hs)));
   padding: calc(var(--safe-t) + 10px) calc(var(--safe-r) + 12px) 0 calc(var(--safe-l) + 12px);
   transform: translateX(-50%);
   contain: layout style;
 }
 
-.hud-left {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  min-width: 0;
-}
-
 .hearts {
+  grid-area: hearts;
+  justify-self: start;
   display: flex;
   gap: 3px;
   padding: 3px 6px 2px 4px;
@@ -896,8 +911,8 @@ body {
 
 .heart {
   display: block;
-  width: 26px;
-  height: 26px;
+  width: calc(26px * var(--hs));
+  height: calc(26px * var(--hs));
 }
 
 .heart-svg {
@@ -932,6 +947,15 @@ body {
   animation: heartbeat 0.9s ease-in-out infinite;
 }
 
+.hud-chips {
+  grid-area: chips;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+
 .hud-chip {
   display: inline-flex;
   align-items: center;
@@ -940,7 +964,7 @@ body {
   padding: 2px 10px 2px 6px;
   border-radius: 999px;
   background: var(--chip);
-  font-size: 14px;
+  font-size: calc(14px * var(--hs));
   font-weight: 600;
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
@@ -948,17 +972,22 @@ body {
 }
 
 .hud-chip-icon.icon {
-  width: 15px;
-  height: 15px;
+  width: calc(15px * var(--hs));
+  height: calc(15px * var(--hs));
 }
 
 .hud-dist .hud-chip-icon {
   color: var(--leaf-light);
 }
 
+/* Score pace against the board's best score. */
 .hud-best {
-  font-size: 13px;
+  font-size: calc(13px * var(--hs));
   color: var(--text-dim);
+}
+
+.hud-best .hud-chip-icon {
+  color: var(--amber);
 }
 
 .hud-best[data-state='none'] {
@@ -970,22 +999,37 @@ body {
   box-shadow: inset 0 0 0 1.5px rgba(255, 194, 75, 0.55);
 }
 
-.hud-best[data-state='passed'] {
+.hud-best[data-state='beat'] {
   background: linear-gradient(180deg, #ffd977, var(--amber-deep));
   color: var(--amber-ink);
   font-weight: 700;
   letter-spacing: 0.04em;
 }
 
+.hud-best[data-state='beat'] .hud-chip-icon {
+  color: var(--amber-ink);
+}
+
 .hud-center {
+  grid-area: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
 }
 
+/* Only the wide side-panel layout labels the score. */
+.hud-score-label {
+  display: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 .hud-score {
-  font-size: 44px;
+  font-size: calc(44px * var(--hs));
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.01em;
@@ -999,13 +1043,14 @@ body {
 }
 
 .hud-score[data-len='l'] {
-  font-size: 36px;
+  font-size: calc(36px * var(--hs));
 }
 
 .hud-score[data-len='xl'] {
-  font-size: 30px;
+  font-size: calc(30px * var(--hs));
 }
 
+/* Combo meter: multiplier pill, decay bar, chain length. A broken chain shows here too. */
 .hud-combo {
   display: flex;
   align-items: center;
@@ -1028,7 +1073,7 @@ body {
   border-radius: 999px;
   background: var(--amber);
   color: var(--amber-ink);
-  font-size: 16px;
+  font-size: calc(16px * var(--hs));
   font-weight: 700;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
@@ -1036,7 +1081,7 @@ body {
 }
 
 .combo-track {
-  width: 64px;
+  width: calc(56px * var(--hs));
   height: 7px;
   padding: 1px;
   border-radius: 4px;
@@ -1054,6 +1099,15 @@ body {
   will-change: transform;
 }
 
+.hud-chain {
+  font-size: calc(12.5px * var(--hs));
+  font-weight: 700;
+  color: #ffe2a0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
 .hud-combo[data-tier='2'] .hud-mult,
 .hud-combo[data-tier='2'] .combo-fill {
   background: #ffad5c;
@@ -1069,30 +1123,44 @@ body {
   background: linear-gradient(90deg, #ff86c2, #ffad5c);
 }
 
-.hud-combo[data-tier='4'] .hud-mult {
+.hud-combo[data-tier='5'] .hud-mult,
+.hud-combo[data-tier='5'] .combo-fill {
+  background: linear-gradient(90deg, #c9a2ff, #ff86c2);
+}
+
+.hud-combo[data-tier='6'] .hud-mult,
+.hud-combo[data-tier='6'] .combo-fill {
+  background: linear-gradient(90deg, #8ff3ff, #c9a2ff);
+}
+
+.hud-combo[data-tier='4'] .hud-mult,
+.hud-combo[data-tier='5'] .hud-mult,
+.hud-combo[data-tier='6'] .hud-mult {
   box-shadow:
     0 2px 0 rgba(0, 0, 0, 0.35),
     0 0 14px rgba(255, 134, 194, 0.7);
 }
 
-.combo-lost {
-  margin-top: 4px;
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: var(--chip);
-  color: var(--coral-light);
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.25s;
+.hud-combo[data-tier='6'] .hud-mult {
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.35),
+    0 0 16px rgba(143, 243, 255, 0.8);
 }
 
-.combo-lost.is-on {
-  opacity: 1;
+.hud-combo.is-lost .hud-mult {
+  background: var(--coral);
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.hud-combo.is-lost .hud-chain {
+  color: var(--coral-light);
+  text-decoration: line-through;
 }
 
 .hud-right {
+  grid-area: right;
+  justify-self: end;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1101,6 +1169,10 @@ body {
 
 .hud-pause {
   pointer-events: auto;
+}
+
+.hud-pause:disabled {
+  opacity: 0.35;
 }
 
 .hud-fps {
@@ -1117,32 +1189,128 @@ body {
   color: var(--coral-light);
 }
 
+/* Wide screens: arcade side panels. Score, combo and pace hug the river's left
+   bank, hearts and pause its right bank, sized for a desk-distance glance. */
+.ui-root[data-layout='wide'] .hud-bar {
+  left: 0;
+  width: 100%;
+  transform: none;
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 400) minmax(0, 1fr);
+  grid-template-areas:
+    'center . hearts'
+    'chips . right';
+  column-gap: 0;
+  row-gap: 14px;
+  padding: calc(var(--safe-t) + 22px) calc(var(--safe-r) + 16px) 0 calc(var(--safe-l) + 16px);
+}
+
+.ui-root[data-layout='wide'] .hud-center {
+  justify-self: end;
+  align-items: flex-end;
+  max-width: calc(var(--gw) - 44px);
+  margin-right: 24px;
+  padding: 12px 18px 14px;
+  border-radius: 22px;
+  background: var(--glass);
+  border: 1px solid var(--line-soft);
+}
+
+.ui-root[data-layout='wide'] .hud-score-label {
+  display: block;
+}
+
+.ui-root[data-layout='wide'] .hud-score {
+  font-size: clamp(52px, 7.6vh, 92px);
+}
+
+.ui-root[data-layout='wide'] .hud-score[data-len='l'] {
+  font-size: clamp(44px, 6.4vh, 78px);
+}
+
+.ui-root[data-layout='wide'] .hud-score[data-len='xl'] {
+  font-size: clamp(36px, 5.2vh, 64px);
+}
+
+.ui-root[data-layout='wide'] .hud-combo {
+  margin-top: 8px;
+}
+
+.ui-root[data-layout='wide'] .hud-mult {
+  font-size: clamp(18px, 2.5vh, 28px);
+}
+
+.ui-root[data-layout='wide'] .combo-track {
+  width: clamp(72px, 9vh, 112px);
+  height: 9px;
+}
+
+.ui-root[data-layout='wide'] .hud-chain {
+  font-size: clamp(14px, 1.9vh, 20px);
+}
+
+.ui-root[data-layout='wide'] .hud-chips {
+  justify-self: end;
+  align-items: flex-end;
+  margin-right: 24px;
+}
+
+.ui-root[data-layout='wide'] .hud-chip {
+  font-size: clamp(16px, 2.2vh, 24px);
+  padding: 3px 14px 3px 9px;
+}
+
+.ui-root[data-layout='wide'] .hud-chip-icon.icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.ui-root[data-layout='wide'] .hearts {
+  justify-self: start;
+  margin-left: 24px;
+  padding: 6px 10px 5px 8px;
+  gap: 6px;
+}
+
+.ui-root[data-layout='wide'] .heart {
+  width: clamp(34px, 4.6vh, 52px);
+  height: clamp(34px, 4.6vh, 52px);
+}
+
+.ui-root[data-layout='wide'] .hud-right {
+  justify-self: start;
+  align-items: flex-start;
+  margin-left: 24px;
+}
+
 /* --- Banners ------------------------------------------------------------------------ */
 
+/* One compact, slightly see-through pill at a time, just under the HUD: the
+   river ahead (where hazards come from) stays readable. */
 .banners {
   position: absolute;
-  top: calc(var(--safe-t) + 112px);
+  top: calc(var(--safe-t) + 104px * var(--hs));
   left: 0;
   right: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  justify-items: center;
   padding: 0 var(--gutter);
   pointer-events: none;
+  opacity: 0.92;
 }
 
 .banner {
+  grid-area: 1 / 1;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
-  padding: 7px 18px 7px 8px;
+  max-height: 46px;
+  padding: 5px 16px 5px 6px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--glass-strong);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
-  animation: banner-in 0.28s var(--ease-spring) both;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  animation: banner-in 0.24s var(--ease-spring) both;
 }
 
 .banner.is-out {
@@ -1153,35 +1321,46 @@ body {
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
 }
 
 .banner-icon .icon {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .banner-text {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
   line-height: 1.1;
   text-align: left;
 }
 
 .banner-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .banner-sub {
-  font-size: 12.5px;
+  overflow: hidden;
+  font-size: 13px;
   color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phones: the flavour line goes; the pill stays one short line. */
+@media (max-width: 430px) {
+  .banner-sub {
+    display: none;
+  }
 }
 
 .banner-calm .banner-icon {
@@ -1204,7 +1383,7 @@ body {
 }
 
 .banner-cloudburst {
-  padding: 9px 22px 9px 10px;
+  padding: 5px 18px 5px 6px;
   background: linear-gradient(90deg, rgba(122, 18, 40, 0.94), rgba(58, 14, 46, 0.94));
   border-color: rgba(255, 130, 140, 0.55);
   animation:
@@ -1213,14 +1392,14 @@ body {
 }
 
 .banner-cloudburst .banner-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   background: var(--amber);
   color: var(--amber-ink);
 }
 
 .banner-cloudburst .banner-title {
-  font-size: 24px;
+  font-size: 20px;
   letter-spacing: 0.06em;
 }
 
@@ -1252,7 +1431,7 @@ body {
 }
 
 .banner-best {
-  padding: 9px 22px 9px 10px;
+  padding: 5px 18px 5px 6px;
   background: linear-gradient(180deg, #ffe08a, var(--amber-deep));
   border-color: #fff1b8;
   color: var(--amber-ink);
@@ -1262,14 +1441,14 @@ body {
 }
 
 .banner-best .banner-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   background: var(--amber-ink);
   color: var(--amber);
 }
 
 .banner-best .banner-title {
-  font-size: 24px;
+  font-size: 20px;
   letter-spacing: 0.05em;
 }
 
@@ -1362,6 +1541,13 @@ body {
 /* On the title, toasts float above the footer hint instead of covering it. */
 .ui-root[data-screen='title'] .dock {
   bottom: calc(var(--safe-b) + 74px);
+}
+
+/* Pause and game over keep their buttons at the bottom: notices go to the top. */
+.ui-root[data-screen='pause'] .dock,
+.ui-root[data-screen='over'] .dock {
+  top: calc(var(--safe-t) + 10px);
+  bottom: auto;
 }
 
 .toasts {
@@ -1536,11 +1722,11 @@ body {
 
 .tut-shadow-fill {
   background: rgba(3, 16, 26, 0.6);
-  animation: tut-grow 1.5s ease-in infinite;
 }
 
 .tut-shadow-ring {
-  border: 2px solid rgba(246, 252, 255, 0.85);
+  border: 2.5px solid rgba(246, 252, 255, 0.9);
+  animation: tut-close 1.5s ease-in infinite;
 }
 
 .tut-copy {
@@ -1565,6 +1751,11 @@ body {
   font-size: 38px;
   color: var(--rain);
   text-shadow: 0 3px 0 #0e5467;
+}
+
+/* "Bonked by a rock!" must stay on one line on a 360 px phone. */
+.over-title.is-long {
+  font-size: clamp(24px, 7.4vw, 34px);
 }
 
 .over-score {
@@ -1635,6 +1826,28 @@ body {
   background: var(--fill-soft);
   color: var(--text-dim);
   font-weight: 600;
+}
+
+.over-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 194, 75, 0.1);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.over-tip-icon.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--amber);
 }
 
 .over-delta {
@@ -1747,15 +1960,11 @@ body {
 
 .mini-you {
   flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: var(--amber);
-  color: var(--amber-ink);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1.6;
-  text-transform: uppercase;
+  box-shadow: 0 0 0 3px rgba(255, 194, 75, 0.25);
 }
 
 .mini-dist {
@@ -1802,7 +2011,7 @@ body {
 }
 
 .btn-hint {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   opacity: 0.72;
@@ -2328,7 +2537,7 @@ body {
   border-radius: 999px;
   background: var(--leaf);
   color: var(--leaf-ink);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2360,10 +2569,11 @@ body {
   color: var(--text-dim);
 }
 
-.ill-grow {
+/* The ring closes onto the shadow, exactly like the in-game telegraph. */
+.ill-close {
   transform-box: fill-box;
   transform-origin: center;
-  animation: ill-grow 1.8s ease-in infinite;
+  animation: ill-close 1.8s ease-in infinite;
 }
 
 .ill-fall {
@@ -2441,12 +2651,12 @@ body {
     font-size: 40px;
   }
 
-  .hud-score {
+  .ui-root:not([data-layout='wide']) .hud-score {
     font-size: 36px;
   }
 
   /* Spread the HUD over the jungle so the short river stays clear. */
-  .hud-bar {
+  .ui-root:not([data-layout='wide']) .hud-bar {
     width: min(100%, 760px);
   }
 }
@@ -2458,7 +2668,38 @@ body {
   }
 
   .banners {
-    top: calc(var(--safe-t) + 124px);
+    top: calc(var(--safe-t) + 116px * var(--hs));
+  }
+}
+
+/* Wide layout: banners sit in the left gutter under the score panel. */
+.ui-root[data-layout='wide'] .banners {
+  top: calc(var(--safe-t) + 46vh);
+  right: auto;
+  width: var(--gw);
+  justify-items: end;
+  padding: 0 40px 0 16px;
+}
+
+/* Phones turned sideways: the river would be a sliver. Ask for portrait (the run pauses itself). */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .ui-root::before {
+    content: 'Turn your phone upright to play';
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 96px 24px 24px;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%23a6e46b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='20' y='8' width='24' height='42' rx='5'/%3E%3Cpath d='M29 43h6'/%3E%3Cpath d='M52 30a20 20 0 0 1-8 18M48 46l-4 2-1-4'/%3E%3C/svg%3E")
+        no-repeat center calc(50% - 34px) / 64px 64px,
+      rgba(6, 20, 27, 0.96);
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    pointer-events: auto;
   }
 }
 
@@ -2587,9 +2828,12 @@ body {
   }
 }
 
-@keyframes tut-grow {
+@keyframes tut-close {
   0% {
-    transform: scale(0.15);
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  15% {
     opacity: 1;
   }
   85% {
@@ -2602,14 +2846,17 @@ body {
   }
 }
 
-@keyframes ill-grow {
+@keyframes ill-close {
   0% {
-    transform: scale(0.15);
-    opacity: 0.8;
+    transform: scale(2.1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
   }
   85% {
     transform: scale(1);
-    opacity: 0.8;
+    opacity: 1;
   }
   100% {
     transform: scale(1);

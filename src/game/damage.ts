@@ -14,13 +14,15 @@ export function applyHit(world: World, st: SimState, source: HitSource, x: numbe
   world.hitsTaken++;
   breakCombo(world);
   world.events.push({ type: 'hit', x, y, source, heartsLeft: p.hearts });
-  if (p.hearts <= 0) startDying(world, st);
+  if (p.hearts <= 0) startDying(world, st, source);
 }
 
-function startDying(world: World, st: SimState): void {
+function startDying(world: World, st: SimState, source: HitSource): void {
   world.state = 'dying';
   world.deathTimer = 0;
   st.deathScroll = world.scrollSpeed;
   st.deathTime = world.time;
+  st.deathDistance = world.distance;
+  st.killedBy = source;
   world.events.push({ type: 'death', x: world.player.x, y: world.player.y });
 }

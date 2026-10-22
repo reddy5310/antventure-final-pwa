@@ -8,21 +8,15 @@ import { UNITS_PER_METER } from './config';
 import { setHapticsEnabled, vibrate } from './engine/haptics';
 import { Input } from './engine/input';
 import { startLoop } from './engine/loop';
+import { QualityGovernor } from './engine/quality';
 import { dailyInfo, randomSeed } from './engine/rng';
+import { SimInput } from './engine/sim-input';
 import { createViewport } from './engine/viewport';
-import { createWorld, setViewHeight, stepWorld, summarize } from './game/world';
+import { createWorld, setDropHold, setViewHeight, stepWorld, summarize } from './game/world';
 import { Renderer } from './render/renderer';
 import * as storage from './storage';
-import type {
-  DailyInfo,
-  GameEvent,
-  InputFrame,
-  Mode,
-  Settings,
-  TitleInfo,
-  TutorialHint,
-  World,
-} from './types';
+import type { DailyInfo, GameEvent, InputFrame, Mode, Settings, TitleInfo, TutorialHint, World } from './types';
+import { RESTART_CONFIRM_AFTER } from './ui/screens/pause';
 import { UI } from './ui/ui';
 
 type Scene = 'menu' | 'run' | 'paused' | 'over';
@@ -30,6 +24,12 @@ type Scene = 'menu' | 'run' | 'paused' | 'over';
 /** Resume countdown: 3 ticks of this many seconds. */
 const COUNTDOWN_TICK = 0.5;
 const IDLE_INPUT: InputFrame = { steerDelta: 0, axis: 0, absoluteX: null };
+/** First-run tutorial: leaf travel (units) that counts as "has steered"... */
+const TUTORIAL_STEER_MOVE = 80;
+/** ...or this long (s) with the steering hint up, whichever comes first (before the first rock arrives). */
+const TUTORIAL_STEER_MAX = 6;
+/** The shadows hint stays this long (s) once the first drop is on screen. */
+const TUTORIAL_SHADOWS_TIME = 5;
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -44,6 +44,8 @@ const viewport = createViewport(canvas, () => {
 const renderer = new Renderer(canvas, viewport, () => settings);
 const audio = new AudioManager(settings);
 const input = new Input(canvas, viewport, () => settings.sensitivity);
+const simInput = new SimInput();
+const quality = new QualityGovernor((cap) => viewport.setDprCap(cap));
 
 let scene: Scene = 'menu';
 let world: World = makeAttractWorld();
@@ -52,12 +54,15 @@ let runDaily: DailyInfo | null = null;
 let runRecorded = false;
 let countdown = 0;
 let countdownShown: number | null = null;
-let tutorial: { stage: TutorialHint; t: number; moved: number; lastX: number } | null = null;
-let frameInput: InputFrame = IDLE_INPUT;
-let firstStepOfFrame = true;
+let tutorial: { stage: TutorialHint; t: number; moved: number; lastX: number; sawDrop: boolean } | null = null;
 let fps = 60;
 let fpsAcc = 0;
 let fpsFrames = 0;
+/** Daily id shown on the title, to refresh the card when the day rolls over. */
+let titleDailyId = '';
+/** PWA notices wait for the title screen: never mid-run (thumb zone), never over the game-over panel. */
+let pendingUpdate: (() => void) | null = null;
+let offlineReadyPending = false;
 
 const ui = new UI(
   uiRoot,
@@ -65,6 +70,7 @@ const ui = new UI(
     onPlay: (mode) => startRun(mode),
     onPause: () => pause(),
     onResume: () => resume(),
+    // The pause screen has already asked for confirmation where it matters.
     onRetry: () => startRun(world.mode),
     onMenu: () => toMenu(),
     onSettings: (s) => applySettings(s),
@@ -101,6 +107,13 @@ function titleInfo(): TitleInfo {
   };
 }
 
+function showTitle(): void {
+  const info = titleInfo();
+  titleDailyId = info.daily.id;
+  ui.showTitle(info);
+  showIdleNotices();
+}
+
 /**
  * Saves a finished run to the boards, once. A run counts from the moment the
  * ant dies, so retrying or quitting during the death animation (before the
@@ -121,6 +134,7 @@ function saveEndedRun(): void {
 function startRun(mode: Mode): void {
   audio.unlock();
   saveEndedRun();
+  ui.clearActionToasts();
   runRecorded = false;
   runDaily = mode === 'daily' ? dailyInfo() : null;
   const dailyId = runDaily?.id ?? null;
@@ -129,10 +143,12 @@ function startRun(mode: Mode): void {
     mode,
     seed: runDaily ? runDaily.seed : randomSeed(),
     dailyId,
-    bestDistance: best ? best.distanceM * UNITS_PER_METER : 0,
+    bestScore: best?.score ?? 0,
+    bestDistance: storage.getFarthest(mode, dailyId) * UNITS_PER_METER,
     viewH: viewport.viewH,
   });
   renderer.reset();
+  simInput.discard();
   scene = 'run';
   countdown = 0;
   countdownShown = null;
@@ -143,12 +159,16 @@ function startRun(mode: Mode): void {
   audio.play('go');
   tutorial = storage.getFlag('tutorialSeen')
     ? null
-    : { stage: 'steer', t: 0, moved: 0, lastX: world.player.x };
+    : { stage: 'steer', t: 0, moved: 0, lastX: world.player.x, sawDrop: false };
+  // Endless only: holding drops shifts the rain's timing, and the Daily River
+  // must be the same river for everyone.
+  if (tutorial && mode === 'endless') setDropHold(world, true);
   ui.showTutorial(tutorial?.stage ?? null);
 }
 
 function pause(): void {
-  if (scene !== 'run') return;
+  // A dying run has nothing to pause: game over is a second away.
+  if (scene !== 'run' || world.state !== 'running') return;
   scene = 'paused';
   countdown = 0;
   countdownShown = null;
@@ -167,6 +187,25 @@ function resume(): void {
   countdown = COUNTDOWN_TICK * 3;
   countdownShown = null;
   audio.setScene('run');
+}
+
+/**
+ * R / gamepad Y. Instant on the game-over screen, in the first seconds of a
+ * run and during the death animation (nothing left to lose). A run with real
+ * progress pauses and asks for a second press instead of vanishing.
+ */
+function requestRestart(): void {
+  if (scene === 'over') {
+    startRun(world.mode);
+    return;
+  }
+  if (scene !== 'run' && scene !== 'paused') return;
+  if (world.state !== 'running' || world.time < RESTART_CONFIRM_AFTER) {
+    startRun(world.mode);
+    return;
+  }
+  if (scene === 'run') pause();
+  if (ui.requestRestart()) startRun(world.mode);
 }
 
 function finishRun(): void {
@@ -193,13 +232,14 @@ function toMenu(): void {
   scene = 'menu';
   input.steeringEnabled = false;
   countdown = 0;
+  simInput.discard();
   if (tutorial) {
     tutorial = null;
     ui.showTutorial(null);
   }
   world = makeAttractWorld();
   renderer.reset();
-  ui.showTitle(titleInfo());
+  showTitle();
   audio.setScene('menu');
 }
 
@@ -207,6 +247,27 @@ function endTutorial(): void {
   tutorial = null;
   ui.showTutorial(null);
   storage.setFlag('tutorialSeen');
+}
+
+function updateTutorial(frameDt: number): void {
+  if (!tutorial || scene !== 'run' || countdown > 0) return;
+  tutorial.moved += Math.abs(world.player.x - tutorial.lastX);
+  tutorial.lastX = world.player.x;
+  if (tutorial.stage === 'steer') {
+    tutorial.t += frameDt;
+    if (tutorial.moved > TUTORIAL_STEER_MOVE || tutorial.t > TUTORIAL_STEER_MAX) {
+      // The player can steer: now let the rain come, and explain it as it does.
+      tutorial.stage = 'shadows';
+      tutorial.t = 0;
+      setDropHold(world, false);
+      ui.showTutorial('shadows');
+    }
+    return;
+  }
+  // The shadows hint is timed from the first telegraph on screen, so it explains what the player is looking at.
+  if (!tutorial.sawDrop) tutorial.sawDrop = world.drops.length > 0;
+  if (tutorial.sawDrop) tutorial.t += frameDt;
+  if (tutorial.t > TUTORIAL_SHADOWS_TIME) endTutorial();
 }
 
 function applySettings(next: Settings): void {
@@ -220,6 +281,17 @@ function applySettings(next: Settings): void {
 function toggleMute(): void {
   applySettings({ ...settings, muted: !settings.muted });
   ui.toast(settings.muted ? 'Sound off' : 'Sound on', { ms: 1200 });
+}
+
+/** Update and offline notices, held back until the player is on the title screen. */
+function showIdleNotices(): void {
+  if (scene !== 'menu') return;
+  if (offlineReadyPending) {
+    offlineReadyPending = false;
+    ui.toast('Ready to play offline', { ms: 2500 });
+  }
+  // Re-offered on every visit to the title until taken; startRun() clears it from the dock.
+  if (pendingUpdate) ui.toast('A new version is ready', { actionLabel: 'Update', onAction: pendingUpdate, ms: 20000 });
 }
 
 const panOf = (x: number) => Math.max(-1, Math.min(1, (x - 200) / 200));
@@ -297,7 +369,7 @@ input.onAction((action) => {
       break;
     case 'retry':
       if (ui.isModalOpen()) return;
-      if (scene === 'run' || scene === 'paused' || scene === 'over') startRun(world.mode);
+      requestRestart();
       break;
     case 'mute':
       toggleMute();
@@ -305,20 +377,50 @@ input.onAction((action) => {
   }
 });
 
+/** The Daily card names today's river; at midnight it must not keep offering yesterday's. */
+function refreshTitleIfStale(): void {
+  if (scene === 'menu' && !ui.isModalOpen() && dailyInfo().id !== titleDailyId) showTitle();
+}
+
+function scheduleMidnightRefresh(): void {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+  window.setTimeout(() => {
+    refreshTitleIfStale();
+    scheduleMidnightRefresh();
+  }, next.getTime() - now.getTime());
+}
+scheduleMidnightRefresh();
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     pause();
     audio.suspend();
   } else {
     audio.resume();
+    refreshTitleIfStale();
   }
 });
 window.addEventListener('blur', () => pause());
 
+// Another tab (or the installed app) saved a run or a name: keep this title current.
+storage.onExternalChange(() => {
+  if (scene === 'menu' && !ui.isModalOpen()) showTitle();
+});
+
+// Phones turned sideways get a "turn upright" overlay (CSS); a live run waits behind it.
+try {
+  const sideways = matchMedia('(orientation: landscape) and (max-height: 500px) and (pointer: coarse)');
+  sideways.addEventListener?.('change', () => {
+    if (sideways.matches) pause();
+  });
+} catch {
+  // No media queries: nothing to watch.
+}
+
 startLoop({
   update(frameDt) {
-    frameInput = input.frame();
-    firstStepOfFrame = true;
+    simInput.feed(input.frame());
 
     fpsAcc += frameDt;
     fpsFrames++;
@@ -327,6 +429,7 @@ startLoop({
       fpsAcc = 0;
       fpsFrames = 0;
     }
+    quality.sample(frameDt, scene === 'run' && countdown === 0 && !document.hidden);
 
     if (scene === 'run' && countdown > 0) {
       countdown = Math.max(0, countdown - frameDt);
@@ -338,34 +441,34 @@ startLoop({
       }
     }
 
-    if (tutorial && scene === 'run' && countdown === 0) {
-      tutorial.t += frameDt;
-      tutorial.moved += Math.abs(world.player.x - tutorial.lastX);
-      tutorial.lastX = world.player.x;
-      if (tutorial.stage === 'steer' && (tutorial.moved > 80 || tutorial.t > 6)) {
-        tutorial.stage = 'shadows';
-        tutorial.t = 0;
-        ui.showTutorial('shadows');
-      } else if (tutorial.stage === 'shadows' && tutorial.t > 4.5) {
-        endTutorial();
-      }
-    }
+    updateTutorial(frameDt);
   },
   step(dt) {
-    if (scene === 'paused') return;
-    if (scene === 'run' && countdown > 0) return;
-    stepWorld(world, scene === 'run' ? frameInput : IDLE_INPUT, dt);
-    if (firstStepOfFrame) {
-      // Relative drag is a delta: apply it once per frame, not once per step.
-      frameInput = { ...frameInput, steerDelta: 0 };
-      firstStepOfFrame = false;
+    if (scene === 'paused' || (scene === 'run' && countdown > 0)) {
+      // Drag made while frozen must not land all at once on the first live step.
+      simInput.discard();
+      return;
     }
-    if (world.events.length) {
-      for (const e of world.events.splice(0)) dispatch(e);
+    if (scene === 'run') {
+      // Drag is handed to exactly one step: frames that run no step (120+ Hz
+      // screens) keep theirs pending instead of losing it.
+      stepWorld(world, simInput.take(), dt);
+    } else {
+      simInput.discard();
+      stepWorld(world, IDLE_INPUT, dt);
+    }
+    const events = world.events;
+    if (events.length) {
+      // Index loop + truncate: no array allocated per step. A handler may
+      // replace `world`, so drain the array that was stepped.
+      for (let i = 0; i < events.length; i++) dispatch(events[i]);
+      events.length = 0;
     }
   },
   render(frameDt) {
-    renderer.render(world, frameDt);
+    // Paused: the field ahead is veiled; on resume it fades back in over the last countdown tick.
+    const veil = scene === 'paused' ? 1 : scene === 'run' && countdown > 0 ? Math.min(1, countdown / COUNTDOWN_TICK) : 0;
+    renderer.render(world, frameDt, veil);
     if (scene === 'run' || scene === 'paused') ui.updateHUD(world, fps);
     audio.setIntensity(world.state === 'attract' ? 0.15 : world.intensity);
   },
@@ -393,14 +496,12 @@ window.addEventListener('appinstalled', () => ui.setInstallAvailable(false, () =
 if (import.meta.env.PROD) {
   const updateSW = registerSW({
     onNeedRefresh() {
-      ui.toast('A new version is ready', {
-        actionLabel: 'Update',
-        onAction: () => void updateSW(true),
-        ms: 20000,
-      });
+      pendingUpdate = () => void updateSW(true);
+      showIdleNotices();
     },
     onOfflineReady() {
-      ui.toast('Ready to play offline', { ms: 2500 });
+      offlineReadyPending = true;
+      showIdleNotices();
     },
   });
 }
@@ -422,6 +523,7 @@ window.__ant = {
     return settings;
   },
   viewport,
+  quality,
   get ui() {
     return ui;
   },
@@ -432,13 +534,34 @@ window.__ant = {
   storage,
 };
 
-// Launch links (the manifest's "Daily River" shortcut): ?mode=daily jumps
-// straight into today's river. The query is dropped so a reload lands on the title.
-const launchMode = new URLSearchParams(location.search).get('mode');
-if (launchMode) history.replaceState(history.state, '', location.pathname + location.hash);
-if (launchMode === 'daily' || launchMode === 'endless') {
+/** ?mode=daily / ?mode=endless: the manifest shortcut and shared Daily links. */
+function launchModeOf(url: string | null | undefined): Mode | null {
+  if (!url) return null;
+  try {
+    const m = new URL(url, location.href).searchParams.get('mode');
+    return m === 'daily' || m === 'endless' ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+// Launch links jump straight into the run. The query is dropped so a reload lands on the title.
+const launchMode = launchModeOf(location.href);
+if (new URLSearchParams(location.search).has('mode')) history.replaceState(history.state, '', location.pathname + location.hash);
+if (launchMode) {
   startRun(launchMode);
 } else {
-  ui.showTitle(titleInfo());
+  showTitle();
   audio.setScene('menu');
 }
+
+// An installed app that is already open receives shortcut launches here
+// (manifest launch_handler: focus-existing) instead of reloading.
+interface LaunchParams {
+  targetURL?: string;
+}
+const launchQueue = (window as unknown as { launchQueue?: { setConsumer(cb: (p: LaunchParams) => void): void } }).launchQueue;
+launchQueue?.setConsumer((params) => {
+  const mode = launchModeOf(params.targetURL);
+  if (mode && scene !== 'run') startRun(mode);
+});

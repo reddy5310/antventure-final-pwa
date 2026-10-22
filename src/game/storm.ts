@@ -7,7 +7,8 @@ import type { StormPhase, World } from '../types';
 import { PHASE_MODS } from './difficulty';
 import type { SimState } from './state';
 
-export const CLOUDBURST_UNLOCK = 90;
+/** Cloudbursts join the cycle from here on (s): skilled runs reach real pressure within the first minute. */
+export const CLOUDBURST_UNLOCK = 60;
 /** How quickly world.intensity glides to its target (1/s). */
 const INTENSITY_RATE = 0.7;
 

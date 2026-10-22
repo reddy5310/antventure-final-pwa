@@ -8,6 +8,7 @@
 import type { Viewport } from '../engine/viewport';
 import type { GameEvent, Settings, World } from '../types';
 import { AntArt } from './ant';
+import { AttractDemo } from './attract-demo';
 import { Banks } from './banks';
 import { drawDrops } from './drops';
 import { Effects } from './effects';
@@ -30,6 +31,7 @@ export class Renderer {
   private fx = new Effects();
   private weather = new Weather();
   private flag = new FlagArt();
+  private attract = new AttractDemo();
   private builtPpu = 0;
   private lastWorld: World | null = null;
   private lastTime = 0;
@@ -77,10 +79,16 @@ export class Renderer {
     this.leaf.reset();
     this.ant.reset();
     this.weather.reset();
+    this.attract.reset();
     this.bubbleAcc = 0;
   }
 
-  render(world: World, frameDt: number): void {
+  /**
+   * `veil` (0..1) darkens everything but a pool of light around the leaf:
+   * full while paused, fading out over the last resume-countdown tick, so a
+   * pause cannot be used to study the frozen hazards ahead.
+   */
+  render(world: World, frameDt: number, veil = 0): void {
     const { g, viewport: v, fx } = this;
     if (world !== this.lastWorld) {
       this.lastWorld = world;
@@ -88,15 +96,16 @@ export class Renderer {
       this.leaf.reset();
       this.ant.reset();
     }
-    // A running world whose clock didn't move is paused or counting down:
-    // freeze gameplay effects but keep the ambience (rain, shimmer) alive.
-    const frozen = world.state === 'running' && world.time === this.lastTime;
-    this.lastTime = world.time;
     const dt = Math.min(0.1, Math.max(0, frameDt));
+    // Gameplay effects run on simulation time: frozen while paused or counting
+    // down, and exact on high-refresh screens where some frames run no step.
+    // Ambience (rain, shimmer) keeps the frame clock.
+    const simDt = Math.min(0.1, Math.max(0, world.time - this.lastTime));
+    this.lastTime = world.time;
 
     g.reduced = this.getSettings().reducedMotion;
     g.dt = dt;
-    g.edt = frozen ? 0 : dt;
+    g.edt = simDt;
     g.t += dt;
     g.dpr = v.dpr;
     g.k = v.dpr * v.scale;
@@ -110,6 +119,7 @@ export class Renderer {
     g.viewH = v.viewH;
 
     fx.update(g.edt, dt);
+    this.attract.update(world, g.edt, fx, g.reduced);
     const sx = g.reduced ? 0 : fx.shakeX();
     const sy = g.reduced ? 0 : fx.shakeY();
     g.ox = v.dpr * v.originX + sx * g.k;
@@ -132,7 +142,7 @@ export class Renderer {
     this.obstacles.draw(g, world);
     const pose = this.leaf.draw(g, world);
     this.ant.draw(g, world, pose);
-    drawDrops(g, world);
+    drawDrops(g, world, world.state === 'attract' ? this.attract.drops : world.drops);
 
     // Bubbles rise where the leaf went down.
     if (pose.sink > 0.6) {
@@ -147,5 +157,25 @@ export class Renderer {
     fx.drawTexts(g);
     this.weather.drawOverlay(g);
     fx.drawVignette(g);
+    if (veil > 0) this.drawVeil(g, world, Math.min(1, veil));
+  }
+
+  private drawVeil(g: Gfx, world: World, veil: number): void {
+    const { ctx } = g;
+    const p = world.player;
+    g.world();
+    // Allocated only while veiled (paused / counting down), never during play.
+    const shade = ctx.createRadialGradient(p.x, p.y, VEIL_CLEAR_R, p.x, p.y, VEIL_DARK_R);
+    shade.addColorStop(0, 'rgba(4, 14, 20, 0)');
+    shade.addColorStop(1, 'rgba(4, 14, 20, 0.92)');
+    ctx.globalAlpha = veil;
+    ctx.fillStyle = shade;
+    ctx.fillRect(g.viewL - 60, -60, g.viewR - g.viewL + 120, g.viewH + 120);
+    ctx.globalAlpha = 1;
   }
 }
+
+/** Veil: clear around the leaf out to this radius (units)... */
+const VEIL_CLEAR_R = 46;
+/** ...and fully dark beyond this one. */
+const VEIL_DARK_R = 130;

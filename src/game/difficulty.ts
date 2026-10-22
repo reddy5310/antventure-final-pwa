@@ -36,14 +36,30 @@ const PATTERN_UNLOCK = 0.1;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** Difficulty level for a run time (s). Monotonic. */
+/** Share of the ease-out curve blended in once the warm-up is over. */
+const PACE_BLEND = 0.6;
+/** The blend fades in over this window (s): the first 15 s stay as gentle as ever. */
+const PACE_FROM = GENTLE_TIME;
+const PACE_SPAN = 45;
+
+/**
+ * Difficulty level for a run time (s). Monotonic.
+ *
+ * Base: linear + smoothstep (gentle start, steepest around 90 s). Players who
+ * survive the first seconds used to spend about two minutes in a low-pressure
+ * warm-up, so after the gentle phase an ease-out curve is blended in: ~0.45
+ * by 60 s (was 0.29), ~0.65 by 90 s, still exactly 1 at RAMP_TIME with a
+ * flat join into overtime. Both curves rise and the blend only grows, so the
+ * result stays monotonic.
+ */
 export function levelAt(timeS: number): number {
   const t = Math.max(0, timeS);
   if (t >= RAMP_TIME) return Math.min(LEVEL_MAX, 1 + ((LEVEL_MAX - 1) * (t - RAMP_TIME)) / OVERTIME_SPAN);
   const b = t / RAMP_TIME;
-  // Linear + smoothstep blend: a gentle start that still moves noticeably
-  // inside the first minute, the steepest part around the 90 s mark.
-  return 0.4 * b + 0.6 * b * b * (3 - 2 * b);
+  const base = 0.4 * b + 0.6 * b * b * (3 - 2 * b);
+  const easeOut = 1 - (1 - b) * (1 - b);
+  const p = clamp01((t - PACE_FROM) / PACE_SPAN);
+  return base + PACE_BLEND * p * p * (3 - 2 * p) * (easeOut - base);
 }
 
 /** Scroll speed is a pure function of time; exported so distance can be inverted. */

@@ -2,16 +2,42 @@
 // then the board, then instant RETRY. Nothing here blocks input — the
 // count-up is decoration and the buttons work from the first frame.
 
+import { COMBO_TIME } from '../../game/tuning';
 import * as storage from '../../storage';
-import type { GameOverInfo } from '../../types';
+import type { GameOverInfo, HitSource, RunSummary } from '../../types';
 import { focusEl, h, setChildren } from '../dom';
 import { animate, type UIEnv } from '../env';
-import { fmtInt, fmtMeters, fmtTime } from '../format';
+import { fmtInt, fmtMeters, fmtTime, plural } from '../format';
 import { icon, type IconName } from '../icons';
-import { buildShareText, shareText } from '../share';
+import { canShareFiles, prepareShareCard, shareRun, type ShareContext } from '../share';
 
 const COUNT_MS = 950;
+/** Draw the share card once the count-up is over, so it never costs a dropped frame there. */
+const CARD_DELAY_MS = 1200;
 const BOARD_ROWS = 5;
+/** Local boards keep this many runs; a rank only means something once it is full (or podium). */
+const BOARD_SIZE = 10;
+
+const TITLES: Record<HitSource, string> = {
+  drop: 'Soaked!',
+  rock: 'Bonked by a rock!',
+  twig: 'Snagged by a twig!',
+};
+
+/** One line that teaches something, keyed to how this run went. */
+export function tipFor(s: RunSummary): string {
+  // What ended the run is the most useful thing to learn from...
+  if (s.killedBy === 'rock') return 'Rocks never move: line up a gap early and slide through.';
+  if (s.killedBy === 'twig') return 'Twigs drift and spin: give them a leaf’s width of room.';
+  // ...then how the rain is read, then how it is scored.
+  if (s.timeS < 20 && s.nearMisses < 3) return 'Watch the shadows: when the ring closes on one, it splashes. Be outside it.';
+  if (s.nearMisses >= 6 && s.maxCombo < 6) {
+    return `Chain near-misses within ${COMBO_TIME} s of each other to stack the multiplier up to ×5.`;
+  }
+  return s.nearMisses < 5
+    ? 'Only the ant counts. A gold ring means you are inside the splash: move!'
+    : 'Graze splashes on purpose: each near-miss pays more at a higher multiplier.';
+}
 const GAP = -1;
 const UNPLACED = -2;
 const STAMP: Keyframe[] = [
@@ -29,6 +55,8 @@ export class GameOverScreen {
   private hintEl: HTMLElement;
   private raf = 0;
   private counting = false;
+  private card: File | null = null;
+  private cardTimer = 0;
 
   constructor(
     private info: GameOverInfo,
@@ -63,7 +91,7 @@ export class GameOverScreen {
       { class: 'stats stats-4' },
       stat('up', 'Distance', fmtMeters(s.distanceM)),
       stat('sparkle', 'Near-misses', fmtInt(s.nearMisses)),
-      stat('bolt', 'Best combo', fmtInt(s.maxCombo)),
+      stat('bolt', 'Best chain', fmtInt(s.maxCombo)),
       stat('clock', 'Time', fmtTime(s.timeS)),
     );
 
@@ -97,10 +125,11 @@ export class GameOverScreen {
         'div',
         { class: `panel screen-panel over-panel${info.isBest ? ' is-best' : ''}${daily ? ' is-daily' : ''}` },
         h('p', { class: 'eyebrow' }, daily ? icon('calendar', 'icon eyebrow-icon') : null, eyebrow),
-        h('h2', { class: 'screen-title over-title', id: 'over-title' }, 'Soaked!'),
+        h('h2', { class: `screen-title over-title${this.title().length > 10 ? ' is-long' : ''}`, id: 'over-title' }, this.title()),
         scoreBlock,
         h('div', { class: 'over-badges' }, this.badgeEl, this.buildDelta()),
         stats,
+        h('p', { class: 'over-tip' }, icon('sparkle', 'icon over-tip-icon'), h('span', null, tipFor(s))),
         this.buildBoard(),
         actions,
       ),
@@ -108,6 +137,11 @@ export class GameOverScreen {
 
     env.announce(this.announcement());
     this.startCountUp();
+    if (canShareFiles()) {
+      this.cardTimer = window.setTimeout(() => {
+        void prepareShareCard(info.summary, info.daily, this.shareContext()).then((f) => (this.card = f));
+      }, CARD_DELAY_MS);
+    }
   }
 
   focusPrimary(): void {
@@ -123,6 +157,7 @@ export class GameOverScreen {
 
   destroy(): void {
     cancelAnimationFrame(this.raf);
+    window.clearTimeout(this.cardTimer);
     this.counting = false;
   }
 
@@ -163,10 +198,18 @@ export class GameOverScreen {
     if (wasCounting) animate(this.env, this.badgeEl, STAMP, { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
   }
 
+  private title(): string {
+    const by = this.info.summary.killedBy;
+    return by ? TITLES[by] : 'Run over';
+  }
+
   private buildBadge(): HTMLElement {
-    const { isBest, rank, prevBest } = this.info;
+    const { isBest, rank, prevBest, board } = this.info;
     if (isBest) return h('span', { class: 'badge badge-best' }, icon('crown'), 'New best!');
-    if (rank) return h('span', { class: 'badge badge-rank' }, icon('trophy'), `#${rank} on your board`);
+    // "#2 on your board" for a tiny run on a two-run board says nothing.
+    if (rank && (rank <= 3 || board.length >= BOARD_SIZE)) {
+      return h('span', { class: 'badge badge-rank' }, icon('trophy'), `#${rank} on your board`);
+    }
     return h('span', { class: 'badge badge-plain' }, prevBest ? `Best ${fmtInt(prevBest.score)}` : 'Keep going!');
   }
 
@@ -180,7 +223,8 @@ export class GameOverScreen {
     const gap = prevBest.score - summary.score;
     if (gap <= 0) return null;
     const close = gap <= Math.max(25, prevBest.score * 0.1);
-    return h('p', { class: `over-delta${close ? ' is-close' : ''}` }, close ? `So close! ${fmtInt(gap)} pts from your best` : `${fmtInt(gap)} pts short of your best`);
+    const pts = plural(gap, 'pt');
+    return h('p', { class: `over-delta${close ? ' is-close' : ''}` }, close ? `So close! ${pts} from your best` : `${pts} short of your best`);
   }
 
   private buildBoard(): HTMLElement {
@@ -201,7 +245,13 @@ export class GameOverScreen {
         'li',
         { class: `mini-row${cls}`, 'aria-current': me ? 'true' : null },
         h('span', { class: 'mini-rank' }, rankText),
-        h('span', { class: 'mini-name' }, h('span', { class: 'mini-name-text' }, name), me ? h('span', { class: 'mini-you' }, 'this run') : null),
+        h(
+          'span',
+          { class: 'mini-name' },
+          // A dot plus the row highlight marks this run, so a 12-letter name still fits at 360 px.
+          me ? h('span', { class: 'mini-you', title: 'This run' }, h('span', { class: 'sr-only' }, 'This run: ')) : null,
+          h('span', { class: 'mini-name-text' }, name),
+        ),
         h('span', { class: 'mini-dist' }, fmtMeters(distanceM)),
         h('span', { class: 'mini-score' }, fmtInt(score)),
       );
@@ -228,16 +278,26 @@ export class GameOverScreen {
 
   private announcement(): string {
     const { summary, isBest, rank } = this.info;
-    let text = `Soaked! Final score ${fmtInt(summary.score)} points, ${fmtMeters(summary.distanceM)}.`;
+    let text = `${this.title()} Final score ${fmtInt(summary.score)} points, ${fmtMeters(summary.distanceM)}.`;
     if (isBest) text += ' New best!';
     else if (rank) text += ` Number ${rank} on your board.`;
     return text;
   }
 
+  private shareContext(): ShareContext {
+    const { daily, isBest } = this.info;
+    return {
+      attempts: daily ? storage.getDailyAttempts(daily.id) : 0,
+      firstTry: daily ? storage.getDailyFirst(daily.id) : null,
+      isBest,
+      name: storage.getName(),
+    };
+  }
+
   private async share(): Promise<void> {
-    const text = buildShareText(this.info.summary, this.info.daily);
-    const result = await shareText(text);
-    if (result === 'copied') this.env.toast('Copied!', { ms: 1600 });
+    const { summary, daily } = this.info;
+    const result = await shareRun(summary, daily, this.shareContext(), this.card);
+    if (result === 'copied') this.env.toast('Copied! Paste it to challenge a friend', { ms: 2000 });
     else if (result === 'failed') this.env.toast('Couldn’t share — try a screenshot', { ms: 2200 });
   }
 }

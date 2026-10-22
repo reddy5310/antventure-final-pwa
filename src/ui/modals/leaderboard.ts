@@ -17,8 +17,11 @@ export interface LeaderboardModal {
 
 function row(e: ScoreEntry, i: number): HTMLElement {
   const meta = [fmtMeters(e.distanceM)];
-  if (e.maxCombo > 0) meta.push(`×${e.maxCombo} combo`);
-  meta.push(fmtRelDate(e.date));
+  // "chain", not "×N combo": × is the score multiplier everywhere else (max ×5).
+  if (e.maxCombo > 1) meta.push(`${fmtInt(e.maxCombo)} chain`);
+  // Only older runs need a date; it is what overflowed on 360 px phones.
+  const when = fmtRelDate(e.date);
+  if (when && when !== 'Today') meta.push(when);
   return h(
     'li',
     { class: `lb-row${i < 3 ? ` is-top${i + 1}` : ''}` },

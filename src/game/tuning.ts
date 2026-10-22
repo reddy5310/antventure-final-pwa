@@ -6,7 +6,7 @@ import { LEAF_HIT_R } from '../config';
 // --- Steering -------------------------------------------------------------
 
 /** Keyboard / gamepad: how fast full deflection moves the steering target (u/s). */
-export const KEY_SPEED = 340;
+export const KEY_SPEED = 420;
 /** A key press starts at this fraction of KEY_SPEED so short taps nudge finely. */
 export const KEY_RAMP_START = 0.45;
 /** Seconds of holding before the key reaches full speed. */

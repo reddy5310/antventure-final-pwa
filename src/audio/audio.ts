@@ -11,7 +11,7 @@
 
 import type { AudioScene, Settings, Sfx } from '../types';
 import { createCrunch, createImpulse, createNoise, rand, Voice, type Kit } from './kit';
-import { MusicLoop, loadBuffer, startLoop } from './streams';
+import { MUSIC_RATE, MusicLoop, RAIN_RATE, loadBuffer, startLoop } from './streams';
 import { SFX, thunder } from './synth';
 
 export interface PlayOptions {
@@ -352,7 +352,7 @@ export class AudioManager {
     if (this.rainState === 'idle' && !s.muted && s.sfx > 0 && this.rainAttempts < LOAD_ATTEMPTS) {
       this.rainState = 'loading';
       this.rainAttempts++;
-      loadBuffer(ctx, base + RAIN_URL)
+      loadBuffer(ctx, base + RAIN_URL, RAIN_RATE)
         .then((buf) => {
           const at = ctx.currentTime + 0.05;
           startLoop(ctx, buf, bus.ambIn, at);
@@ -371,7 +371,7 @@ export class AudioManager {
     if (this.musicState === 'idle' && !s.muted && s.music > 0 && this.musicAttempts < LOAD_ATTEMPTS) {
       this.musicState = 'loading';
       this.musicAttempts++;
-      loadBuffer(ctx, base + MUSIC_URL)
+      loadBuffer(ctx, base + MUSIC_URL, MUSIC_RATE)
         .then((buf) => {
           const at = ctx.currentTime + 0.1;
           this.music = new MusicLoop(ctx, buf, bus.musicIn);

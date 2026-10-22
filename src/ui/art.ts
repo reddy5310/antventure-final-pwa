@@ -94,10 +94,12 @@ export type Illustration = 'shadows' | 'near-miss' | 'obstacles' | 'hearts' | 'd
 
 const SCENES: Record<Illustration, string> = {
   shadows: `${WATER_BG}
-    <circle cx="48" cy="44" r="19" fill="${C.shadow}" opacity=".42"/>
-    <circle cx="48" cy="44" r="19" fill="none" stroke="${C.ring}" stroke-opacity=".85" stroke-width="2"/>
-    <circle class="ill-grow" cx="48" cy="44" r="19" fill="${C.shadow}" opacity=".45"/>
-    <path class="ill-fall" d="M48 6c3 4 5 6.6 5 9.4a5 5 0 0 1-10 0c0-2.8 2-5.4 5-9.4z" fill="${C.dropBody}" stroke="${C.waterDeep}" stroke-width="1.2"/>`,
+    <circle cx="38" cy="44" r="17" fill="${C.shadow}" opacity=".5"/>
+    <circle cx="38" cy="44" r="17" fill="none" stroke="${C.ring}" stroke-opacity=".5" stroke-width="1.2"/>
+    <circle class="ill-close" cx="38" cy="44" r="17" fill="none" stroke="${C.ring}" stroke-width="2.6"/>
+    <path class="ill-fall" d="M38 6c3 4 5 6.6 5 9.4a5 5 0 0 1-10 0c0-2.8 2-5.4 5-9.4z" fill="${C.dropBody}" stroke="${C.waterDeep}" stroke-width="1.2"/>
+    ${leafMarkup(76, 48, 0.36, -8)}
+    ${antMarkup(75, 47, 0.42)}`,
   'near-miss': `${WATER_BG}
     <circle cx="34" cy="42" r="17" fill="none" stroke="${C.foam}" stroke-width="3" opacity=".9"/>
     <circle cx="34" cy="42" r="9" fill="none" stroke="${C.foam}" stroke-width="2" opacity=".55"/>

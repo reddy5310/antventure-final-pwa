@@ -5,7 +5,7 @@ import { maxTwigLen } from '../../src/game/obstacles';
 import { leafLimits } from '../../src/game/player';
 import { riverEdgesAt } from '../../src/game/river';
 import { batchPush, simState } from '../../src/game/state';
-import { OBSTACLE_PASS } from '../../src/game/tuning';
+import { HIT_PAD, OBSTACLE_PASS } from '../../src/game/tuning';
 import { createWorld, stepWorld } from '../../src/game/world';
 import type { InputFrame, World } from '../../src/types';
 import { createDodgeBot } from './helpers/sim';
@@ -50,9 +50,14 @@ describe('escapability check', () => {
     const near = wall(w, 160);
     expect(batchIsEscapable(w, near.st, near.b, 0.8, w.player.x)).toBe(true);
     const far = wall(w, 320);
-    expect(320 - 120).toBeGreaterThan(fairReach(0.8));
-    expect(batchIsEscapable(w, far.st, far.b, 0.8, w.player.x)).toBe(false);
+    // The far gap's nearest safe spot for the leaf centre: just right of the
+    // splash at x = 240 (splash radius + ant radius + padding).
+    const nearestSafe = 240 + 18 + ANT_HIT_R + HIT_PAD;
+    const short = 0.6;
+    expect(nearestSafe - 120).toBeGreaterThan(fairReach(short));
+    expect(batchIsEscapable(w, far.st, far.b, short, w.player.x)).toBe(false);
     // With a long telegraph the far gap becomes fair.
+    expect(nearestSafe - 120).toBeLessThan(fairReach(1.6));
     expect(batchIsEscapable(w, far.st, far.b, 1.6, w.player.x)).toBe(true);
   });
 
