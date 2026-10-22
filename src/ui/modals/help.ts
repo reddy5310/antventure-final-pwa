@@ -22,9 +22,14 @@ const MAX_MULT = 1 + COMBO_STEP * COMBO_CAP;
 
 const RULES: { ill: Illustration; title: string; text: string }[] = [
   {
+    ill: 'rain-vs-rock',
+    title: 'Rain or rock?',
+    text: 'Pale dashed circles with a drop in the middle are rain: get your ant out before the ring closes (the leaf is safe). Brown stones are solid: steer the whole leaf around them.',
+  },
+  {
     ill: 'shadows',
-    title: 'Shadows mark the rain',
-    text: 'A shadow marks where a drop will land. When the ring closes onto it: splash! Only your ant counts — splashes on the leaf are free. A gold ring means you are inside it: move!',
+    title: 'Rain circles mark the rain',
+    text: 'A rain circle marks where a drop will land. When the ring closes onto it: splash! Only your ant counts — splashes on the leaf are free. A gold ring means you are inside it: move!',
   },
   {
     ill: 'near-miss',
@@ -33,7 +38,7 @@ const RULES: { ill: Illustration; title: string; text: string }[] = [
   },
   {
     ill: 'obstacles',
-    title: 'Rocks and twigs hurt',
+    title: 'Rocks and twigs: steer around',
     text: 'These hit the whole leaf: bumping one costs a heart. Twigs drift, rocks don’t. Banks are soft: bump them freely.',
   },
   {

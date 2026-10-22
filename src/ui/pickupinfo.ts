@@ -42,7 +42,7 @@ export const ZONE_INFO: Readonly<Record<ZoneId, ZoneInfo>> = {
     name: ZONES.night.name,
     icon: 'zoneNight',
     sub: 'Stay in the light',
-    rule: 'Dark except around the leaf. Rain shadows still glow, so keep reading the rings.',
+    rule: 'Dark except around the leaf. Rain circles still glow, so keep reading the rings.',
   },
 };
 
@@ -89,6 +89,23 @@ export const PAD_INFO: Readonly<Pick<PickupInfo, 'name' | 'icon' | 'effect'>> = 
   name: 'Lily pads',
   icon: 'zoneMarsh',
   effect: 'soft: they push, never hurt',
+};
+
+/**
+ * Rocks and rain follow different rules but used to look alike, so each gets a
+ * one-time hint too (same shape as the pads). Rain is the one a first-run
+ * player already met in the tutorial card; see PickupHint.arm().
+ */
+export const ROCK_INFO: Readonly<Pick<PickupInfo, 'name' | 'icon' | 'effect'>> = {
+  name: 'Rocks',
+  icon: 'rock',
+  effect: 'solid: steer the leaf around them',
+};
+
+export const RAIN_INFO: Readonly<Pick<PickupInfo, 'name' | 'icon' | 'effect'>> = {
+  name: 'Rain',
+  icon: 'drop',
+  effect: 'move the ant out of the circle before the ring closes',
 };
 
 export const POWER_NAME: Readonly<Record<PowerKind, string>> = {

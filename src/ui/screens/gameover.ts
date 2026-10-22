@@ -40,7 +40,7 @@ export function tipFor(s: RunSummary): string {
   if (s.killedBy === 'rock') return 'Rocks never move: line up a gap early and slide through.';
   if (s.killedBy === 'twig') return 'Twigs drift and spin: give them a leaf’s width of room.';
   // ...then how the rain is read, then how it is scored.
-  if (s.timeS < 20 && s.nearMisses < 3) return 'Watch the shadows: when the ring closes on one, it splashes. Be outside it.';
+  if (s.timeS < 20 && s.nearMisses < 3) return 'Watch the rain circles: when the ring closes on one, it splashes. Get your ant out.';
   if (s.nearMisses >= 6 && s.maxCombo < 6) {
     return `Chain near-misses within ${COMBO_TIME} s of each other to stack the multiplier up to ×5.`;
   }

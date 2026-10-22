@@ -8,7 +8,7 @@ import type { Device, PickupKind, TutorialHint, World } from '../types';
 import { h, setChildren } from './dom';
 import { animate, type UIEnv } from './env';
 import { icon, type IconName } from './icons';
-import { PAD_INFO, PICKUP_INFO } from './pickupinfo';
+import { PAD_INFO, PICKUP_INFO, RAIN_INFO, ROCK_INFO } from './pickupinfo';
 import type { ToastOptions } from './ui';
 
 const OUT_MS = 200;
@@ -180,10 +180,10 @@ export class Pills {
 // ---------------------------------------------------------------------------
 
 /**
- * The first time a power-up (or a lily pad) is ever on screen, say what it
- * does (once, then never again). The pads need it most: they look like solid
- * obstacles, and a player who steers around every one never finds out they
- * are harmless.
+ * The first time a power-up, a lily pad, a rock or a rain circle is ever on
+ * screen, say what it does (once, then never again). Pads, rocks and rain need
+ * it most: they all read as "a round thing to avoid", yet pads are harmless,
+ * rocks are solid and rain only hurts the ant, and nothing else tells them apart.
  */
 const HINT_S = 2.6;
 /** Visible = inside the top edge of the view (world units). */
@@ -191,10 +191,10 @@ const HINT_TOP = 6;
 /** ...and not already past the leaf. */
 const HINT_BOTTOM = 120;
 
-type HintKind = Exclude<PickupKind, 'crumb'> | 'pad';
-const HINT_KINDS: readonly HintKind[] = ['mushroom', 'honey', 'ladybug', 'firefly', 'pad'];
-const kindBit = (k: PickupKind): number => (k === 'mushroom' ? 1 : k === 'honey' ? 2 : k === 'ladybug' ? 4 : k === 'firefly' ? 8 : 0);
-const PAD_BIT = 16;
+type HintKind = Exclude<PickupKind, 'crumb'> | 'pad' | 'rock' | 'rain';
+const HINT_KINDS: readonly HintKind[] = ['mushroom', 'honey', 'ladybug', 'firefly', 'pad', 'rock', 'rain'];
+/** One bit per kind in `unseen`. */
+const HINT_BIT: Readonly<Record<HintKind, number>> = { mushroom: 1, honey: 2, ladybug: 4, firefly: 8, pad: 16, rock: 32, rain: 64 };
 const flagOf = (k: HintKind): string => `seen:${k}`;
 
 export class PickupHint {
@@ -208,38 +208,56 @@ export class PickupHint {
 
   constructor() {
     this.el = h('div', { class: 'pk-hint', hidden: true, role: 'status', 'aria-live': 'polite' });
-    for (const k of HINT_KINDS) if (!storage.getFlag(flagOf(k))) this.unseen |= k === 'pad' ? PAD_BIT : kindBit(k);
+    this.readFlags();
   }
 
-  /** Called every frame while running: cheap, allocation-free. */
-  scan(w: World): void {
+  /**
+   * Start of every run: re-read the flags, so ones set since the constructor
+   * (another tab, a test, the previous run) count. A player who has not done
+   * the first-run tutorial is about to get the rain explained by its card, so
+   * the rain hint is marked done instead of saying it twice.
+   */
+  arm(): void {
+    if (!storage.getFlag('tutorialSeen')) storage.setFlag(flagOf('rain'));
+    this.readFlags();
+  }
+
+  /** Called every frame while running: cheap, allocation-free. `tutorialUp`: the tutorial card is on screen, so no new hint starts under it. */
+  scan(w: World, tutorialUp = false): void {
     if (!this.el.hidden) {
       this.age(w.time);
       return;
     }
     // One hint at a time: a second kind in view waits for the first to finish rather than replacing it.
-    if (this.unseen === 0 || w.state !== 'running') return;
+    if (this.unseen === 0 || w.state !== 'running' || tutorialUp) return;
+    const bottom = w.viewH - HINT_BOTTOM;
     const list = w.pickups;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       if (p.taken || p.kind === 'crumb') continue;
-      const bit = kindBit(p.kind);
-      if (!(this.unseen & bit)) continue;
-      if (p.y < HINT_TOP || p.y > w.viewH - HINT_BOTTOM) continue;
-      this.unseen &= ~bit;
-      storage.setFlag(flagOf(p.kind));
-      this.show(w.time, p.kind);
+      if (!(this.unseen & HINT_BIT[p.kind])) continue;
+      if (p.y < HINT_TOP || p.y > bottom) continue;
+      this.claim(w.time, p.kind);
       return;
     }
-    if (!(this.unseen & PAD_BIT)) return;
-    const obs = w.obstacles;
-    for (let i = 0; i < obs.length; i++) {
-      const o = obs[i];
-      if (o.kind !== 'pad' || o.y < HINT_TOP || o.y > w.viewH - HINT_BOTTOM) continue;
-      this.unseen &= ~PAD_BIT;
-      storage.setFlag(flagOf('pad'));
-      this.show(w.time, 'pad');
-      return;
+    if (this.unseen & (HINT_BIT.pad | HINT_BIT.rock)) {
+      const obs = w.obstacles;
+      for (let i = 0; i < obs.length; i++) {
+        const o = obs[i];
+        if (o.kind === 'twig' || o.y < HINT_TOP || o.y > bottom || !(this.unseen & HINT_BIT[o.kind])) continue;
+        this.claim(w.time, o.kind);
+        return;
+      }
+    }
+    if (this.unseen & HINT_BIT.rain) {
+      const drops = w.drops;
+      for (let i = 0; i < drops.length; i++) {
+        const d = drops[i];
+        // A negative age is a drop that is still queued, with no circle drawn yet.
+        if (d.age < 0 || d.y < HINT_TOP || d.y > bottom) continue;
+        this.claim(w.time, 'rain');
+        return;
+      }
     }
   }
 
@@ -247,6 +265,18 @@ export class PickupHint {
     this.fading = false;
     this.el.hidden = true;
     this.el.classList.remove('is-out');
+  }
+
+  private readFlags(): void {
+    let unseen = 0;
+    for (const k of HINT_KINDS) if (!storage.getFlag(flagOf(k))) unseen |= HINT_BIT[k];
+    this.unseen = unseen;
+  }
+
+  private claim(now: number, kind: HintKind): void {
+    this.unseen &= ~HINT_BIT[kind];
+    storage.setFlag(flagOf(kind));
+    this.show(now, kind);
   }
 
   private age(now: number): void {
@@ -261,7 +291,7 @@ export class PickupHint {
   }
 
   private show(now: number, kind: HintKind): void {
-    const info = kind === 'pad' ? PAD_INFO : PICKUP_INFO[kind];
+    const info = kind === 'pad' ? PAD_INFO : kind === 'rock' ? ROCK_INFO : kind === 'rain' ? RAIN_INFO : PICKUP_INFO[kind];
     this.hide();
     setChildren(
       this.el,
@@ -436,11 +466,17 @@ export class Tutorial {
     } else {
       setChildren(
         this.el,
-        h('div', { class: 'tut-visual tut-shadow' }, h('span', { class: 'tut-shadow-fill' }), h('span', { class: 'tut-shadow-ring' })),
+        h(
+          'div',
+          { class: 'tut-visual tut-shadow' },
+          h('span', { class: 'tut-shadow-fill' }),
+          h('span', { class: 'tut-shadow-ring' }),
+          h('span', { class: 'tut-shadow-drop' }),
+        ),
         h(
           'div',
           { class: 'tut-copy' },
-          h('p', { class: 'tut-title' }, 'Shadows show where rain will land'),
+          h('p', { class: 'tut-title' }, 'Rain circles show where drops land'),
           h('p', { class: 'tut-sub' }, 'Only the ant counts. Gold ring? Move! Graze close for points'),
         ),
       );

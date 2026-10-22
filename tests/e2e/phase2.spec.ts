@@ -12,10 +12,13 @@ import { createZoneSample, FIRST_ZONE_M, ZONES, zoneAt } from '../../src/game/zo
 import type { Drop, World, ZoneId } from '../../src/types';
 import { type AntWindow, expect, expectScene, forceDeath, openTitle, pauseButton, playButton, resumeButton, test } from './fixtures';
 
-/** A fresh endless run with the first-run tutorial out of the way. */
+/** A fresh endless run with the first-run tutorial and the rock and rain hints out of the way, so the hint tests below stay about their own hint. */
 async function startRun(page: Page): Promise<number> {
   await openTitle(page);
-  await page.evaluate(() => (window as unknown as AntWindow).__ant.storage.setFlag('tutorialSeen'));
+  await page.evaluate(() => {
+    const { storage } = (window as unknown as AntWindow).__ant;
+    for (const flag of ['tutorialSeen', 'seen:rain', 'seen:rock']) storage.setFlag(flag);
+  });
   await playButton(page).click();
   await expectScene(page, 'run');
   return page.evaluate(() => (window as unknown as AntWindow).__ant.world.seed);

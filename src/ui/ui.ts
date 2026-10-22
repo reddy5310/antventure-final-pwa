@@ -177,6 +177,8 @@ export class UI {
     this.modals.closeAll();
     this.unmount();
     this.hud.el.hidden = false;
+    // Re-read the "seen" flags (and settle the rain hint for first-run players) every time the river starts or resumes.
+    this.pickupHint.arm();
     // A focused (now removed) menu button must not swallow Space/arrow keys mid-run.
     const active = document.activeElement;
     if (active instanceof HTMLElement && this.root.contains(active)) active.blur();
@@ -187,7 +189,7 @@ export class UI {
   updateHUD(world: World, fps: number): void {
     this.lastWorld = world;
     this.hud.update(world, fps, this.showFps);
-    this.pickupHint.scan(world);
+    this.pickupHint.scan(world, !this.tutorial.el.hidden);
   }
 
   showPause(): void {

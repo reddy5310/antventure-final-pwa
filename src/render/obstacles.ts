@@ -1,6 +1,11 @@
-// Rocks, lily pads and twigs. Rock bodies are pre-rendered variants (flat-shaded,
-// some mossy, all with a wet sheen); their foam ring, bow wave and wake are drawn
-// live so they shimmer, and in the Rapids they throw spray and trail long foam
+// Rocks, lily pads and twigs. A rock is a warm river stone standing up out of
+// the water: a pre-rendered sprite with a soft cast shadow to the lower right, a
+// darker side face below and right of the lit top (that crescent is its height),
+// a faceted shoulder, cracks, speckles, moss on some and a wet sheen. The water
+// around it is drawn live and follows the current, which runs UP the screen: a
+// bright bow wave hugs the upstream (lower) side and a V-shaped wake streams
+// away from its flanks, so a rock never shows the full pale ring a raindrop
+// telegraph uses. In the Rapids they also throw spray and trail long foam
 // streaks. Lily pads (Lily Marsh bumpers) are pre-rendered too: big, with a
 // notch and a pale raised rim so they read as solid-ish bumpers rather than the
 // small decorative pads, plus a soft ripple that swells when the leaf touches
@@ -17,37 +22,97 @@ import { frameLook, type ZoneLook } from './zonelook';
 /** Spray droplets thrown off each rock in white water. */
 const SPRAY_N = 10;
 
-function rockSprite(ppu: number, seed: number): Sprite {
-  // Irregular but averaging ~0.93 of R0, so the drawn rock matches its collision circle.
+/**
+ * A rock's wake is stroked as three nested stretches of the same curve (the
+ * whole line, then its first 64% and first 32%), each narrower-to-wider and
+ * brighter towards the rock, so the foam thickens at the stone and fades away
+ * from it without a gradient (which would allocate every frame).
+ */
+const WAKE_CUT = [1, 0.64, 0.32];
+const WAKE_ALPHA = [0.3, 0.34, 0.4];
+const WAKE_WIDTH = [1.8, 2.6, 3.5];
+
+/**
+ * Rock variant `i` as a stone seen from above, lit from the upper left. The
+ * game turns every rock by `variant * TAU` and the sprite is drawn with that
+ * turn, so every light-dependent offset (shadow, side face, highlights, moss,
+ * sheen) is authored in screen terms and rotated back by the middle of the
+ * variant's turn range: the light stays roughly upper left (within 30 degrees)
+ * whatever way the stone is turned, while the outline stays the one
+ * `rockShape` gives, matching the collision circle and the night outline.
+ */
+function rockSprite(ppu: number, i: number): Sprite {
+  const seed = rockSeed(i);
   const outline = rockShape(seed);
   const rand = outline.rand;
   const mossy = seed % 2 === 0;
-  const size = R0 * 2.3;
+  const turn = ((i + 0.5) / VARIANTS) * TAU;
+  const cs = Math.cos(turn);
+  const sn = Math.sin(turn);
+  // Room for the side face and the blurred shadow (outline reaches ~1.06 R0).
+  const size = R0 * 3;
   return makeSprite(size, size, ppu, (c) => {
-    const shape = (s: number, ox: number, oy: number) => {
+    // A screen-space offset (wx, wy), in units of R0, as sprite-local coordinates.
+    const lx = (wx: number, wy: number) => (wx * cs + wy * sn) * R0;
+    const ly = (wx: number, wy: number) => (wy * cs - wx * sn) * R0;
+    const shape = (s: number, wx: number, wy: number) => {
       c.beginPath();
-      traceRock(c, outline, s, ox, oy);
+      traceRock(c, outline, s, lx(wx, wy), ly(wx, wy));
     };
-    c.shadowColor = 'rgba(0, 12, 20, 0.5)';
-    c.shadowBlur = 3 * ppu;
-    c.fillStyle = P.rockDark;
-    shape(1, 0, 0);
+    // Cast shadow, soft and thrown to the lower right. The shape itself is drawn
+    // far outside the canvas and only its offset blurred shadow lands in it, so
+    // there is no hard edge and no centred halo.
+    const far = size * 4;
+    c.shadowColor = 'rgba(0, 14, 24, 0.55)';
+    c.shadowBlur = 3.5 * ppu;
+    c.shadowOffsetX = far * c.getTransform().a;
+    c.fillStyle = '#000';
+    c.beginPath();
+    traceRock(c, outline, 1, lx(0.12, 0.17) - far, ly(0.12, 0.17));
     c.fill();
     c.shadowColor = 'transparent';
     c.shadowBlur = 0;
-    c.fillStyle = P.rock;
-    shape(0.88, -R0 * 0.05, -R0 * 0.07);
+    c.shadowOffsetX = 0;
+    // Side face: the stone's flank, down and right of the top, darkening away from the light.
+    const flank = c.createLinearGradient(lx(-0.2, -0.3), ly(-0.2, -0.3), lx(0.4, 0.6), ly(0.4, 0.6));
+    flank.addColorStop(0, P.rockSide);
+    flank.addColorStop(1, P.rockDark);
+    c.fillStyle = flank;
+    c.strokeStyle = P.rockDark;
+    c.lineWidth = 1.3;
+    shape(1, 0.04, 0.09);
     c.fill();
+    c.stroke();
+    // Top face, a touch smaller and shifted up-left, so a crescent of side shows below and right.
+    c.fillStyle = P.rock;
+    shape(0.93, -0.03, -0.04);
+    c.fill();
+    // Volume: the top turns away from the light towards the lower right.
+    c.save();
+    c.clip();
+    const turnAway = c.createRadialGradient(lx(0.34, 0.42), ly(0.34, 0.42), 0, lx(0.34, 0.42), ly(0.34, 0.42), R0 * 0.8);
+    turnAway.addColorStop(0, 'rgba(46, 32, 22, 0.4)');
+    turnAway.addColorStop(1, 'rgba(46, 32, 22, 0)');
+    c.fillStyle = turnAway;
+    c.fillRect(-R0 * 1.5, -R0 * 1.5, R0 * 3, R0 * 3);
+    c.restore();
+    // Crisp rim between the top and the flank.
+    c.strokeStyle = 'rgba(58, 47, 40, 0.6)';
+    c.lineWidth = 0.9;
+    shape(0.93, -0.03, -0.04);
+    c.stroke();
+    // Lit shoulder and the brightest top.
     c.fillStyle = P.rockLight;
-    shape(0.6, -R0 * 0.14, -R0 * 0.19);
+    shape(0.6, -0.12, -0.17);
     c.fill();
     c.fillStyle = P.rockTop;
     c.globalAlpha = 0.8;
-    shape(0.28, -R0 * 0.28, -R0 * 0.33);
+    shape(0.28, -0.24, -0.3);
     c.fill();
     c.globalAlpha = 1;
     // Cracks.
     c.strokeStyle = P.rockDark;
+    c.globalAlpha = 0.8;
     c.lineWidth = 1.3;
     c.beginPath();
     const ca = rand() * TAU;
@@ -55,9 +120,10 @@ function rockSprite(ppu: number, seed: number): Sprite {
     c.lineTo(Math.cos(ca + 0.3) * R0 * 0.5, Math.sin(ca + 0.3) * R0 * 0.5);
     c.lineTo(Math.cos(ca + 0.1) * R0 * 0.78, Math.sin(ca + 0.1) * R0 * 0.78);
     c.stroke();
-    // Speckles.
-    c.fillStyle = 'rgba(30, 38, 44, 0.45)';
-    for (let i = 0; i < 7; i++) {
+    c.globalAlpha = 1;
+    // Speckles, warm dark.
+    c.fillStyle = 'rgba(52, 38, 28, 0.42)';
+    for (let k = 0; k < 7; k++) {
       const a = rand() * TAU;
       const d = rand() * R0 * 0.7;
       c.beginPath();
@@ -67,10 +133,10 @@ function rockSprite(ppu: number, seed: number): Sprite {
     if (mossy) {
       // A cluster of soft moss blobs on the lit shoulder, never a single shape.
       const a = Math.PI * (1.05 + rand() * 0.5);
-      const mx = Math.cos(a) * R0 * 0.42;
-      const my = Math.sin(a) * R0 * 0.42;
+      const mx = lx(Math.cos(a) * 0.42, Math.sin(a) * 0.42);
+      const my = ly(Math.cos(a) * 0.42, Math.sin(a) * 0.42);
       c.fillStyle = P.moss;
-      for (let i = 0; i < 6; i++) {
+      for (let k = 0; k < 6; k++) {
         const ba = rand() * TAU;
         const bd = rand() * R0 * 0.2;
         c.beginPath();
@@ -78,21 +144,21 @@ function rockSprite(ppu: number, seed: number): Sprite {
         c.fill();
       }
       c.fillStyle = P.mossLight;
-      for (let i = 0; i < 4; i++) {
+      for (let k = 0; k < 4; k++) {
         c.beginPath();
-        c.arc(mx - R0 * 0.05 + (rand() - 0.5) * R0 * 0.3, my - R0 * 0.05 + (rand() - 0.5) * R0 * 0.2, R0 * (0.03 + rand() * 0.03), 0, TAU);
+        c.arc(mx + lx(-0.05, -0.05) + (rand() - 0.5) * R0 * 0.3, my + ly(-0.05, -0.05) + (rand() - 0.5) * R0 * 0.2, R0 * (0.03 + rand() * 0.03), 0, TAU);
         c.fill();
       }
     }
-    // Wet sheen: a crisp highlight arc on the lit side.
-    c.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    // Wet sheen: a crisp highlight arc on the lit side (screen angles, turned back into the sprite's frame).
+    c.strokeStyle = 'rgba(255, 246, 228, 0.6)';
     c.lineWidth = 2;
     c.beginPath();
-    c.arc(-R0 * 0.08, -R0 * 0.1, R0 * 0.66, Math.PI * 1.08, Math.PI * 1.42);
+    c.arc(lx(-0.08, -0.1), ly(-0.08, -0.1), R0 * 0.66, Math.PI * 1.08 - turn, Math.PI * 1.42 - turn);
     c.stroke();
-    c.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    c.fillStyle = 'rgba(255, 248, 235, 0.8)';
     c.beginPath();
-    c.arc(-R0 * 0.42, -R0 * 0.18, 1.6, 0, TAU);
+    c.arc(lx(-0.42, -0.18), ly(-0.42, -0.18), 1.6, 0, TAU);
     c.fill();
   });
 }
@@ -202,7 +268,7 @@ export class ObstacleArt {
 
   build(ppu: number): void {
     this.rocks = [];
-    for (let i = 0; i < VARIANTS; i++) this.rocks.push(rockSprite(ppu, rockSeed(i)));
+    for (let i = 0; i < VARIANTS; i++) this.rocks.push(rockSprite(ppu, i));
     this.pads = [];
     for (let i = 0; i < PAD_VARIANTS; i++) this.pads.push(padSprite(ppu, padSeed(i)));
   }
@@ -240,39 +306,76 @@ export class ObstacleArt {
     const ph = o.id * 1.7;
     // White-water weight at the rock's own spot on the river.
     const wr = look.weightAt('rapids', g.dOfY(y));
+    const fade = o.hit ? 0.3 : 1;
     g.world();
-    ctx.globalAlpha = o.hit ? 0.3 : 1;
-    // Darker eddy around the rock.
-    ctx.fillStyle = 'rgba(4, 26, 36, 0.32)';
-    ctx.beginPath();
-    ctx.ellipse(x + 2.5, y + 3.5, r * 1.32, r * 1.26, 0, 0, TAU);
-    ctx.fill();
-    // Wake streaming downstream (up the screen).
-    ctx.strokeStyle = P.foam;
     ctx.lineCap = 'round';
+    // Slack water in the rock's lee: a tall, narrow shade trailing up the screen.
+    // An ellipse well taller than wide, never a disc (a round dark patch read as a rain circle).
+    ctx.globalAlpha = fade * 0.15;
+    ctx.fillStyle = '#041a24';
+    ctx.beginPath();
+    ctx.ellipse(x + 1.5, y - r * 1.2, r * 0.5, r * 1.5, 0, 0, TAU);
+    ctx.fill();
+    // Short ripple arcs on the downstream (upper) side, tucked between the wake's arms.
+    ctx.strokeStyle = P.foam;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = (o.hit ? 0.3 : 1) * 0.22;
-    // Ripple arcs on the downstream (upper) side: water closing in behind the rock.
+    ctx.globalAlpha = fade * 0.22;
     ctx.beginPath();
     const wob = Math.sin(t * 3 + ph) * 0.06;
     const r1 = r * 1.42;
     const r2 = r * 1.75;
-    ctx.arc(x, y, r1, -Math.PI * 0.86 + wob, -Math.PI * 0.6 + wob);
-    ctx.moveTo(x + Math.cos(-Math.PI * 0.4 - wob) * r1, y + Math.sin(-Math.PI * 0.4 - wob) * r1);
-    ctx.arc(x, y, r1, -Math.PI * 0.4 - wob, -Math.PI * 0.14 - wob);
-    ctx.moveTo(x + Math.cos(-Math.PI * 0.7) * r2, y + Math.sin(-Math.PI * 0.7) * r2);
-    ctx.arc(x, y, r2, -Math.PI * 0.7, -Math.PI * 0.3);
+    ctx.arc(x, y, r1, -Math.PI * 0.7 + wob, -Math.PI * 0.56 + wob);
+    ctx.moveTo(x + Math.cos(-Math.PI * 0.44 - wob) * r1, y + Math.sin(-Math.PI * 0.44 - wob) * r1);
+    ctx.arc(x, y, r1, -Math.PI * 0.44 - wob, -Math.PI * 0.3 - wob);
+    ctx.moveTo(x + Math.cos(-Math.PI * 0.66) * r2, y + Math.sin(-Math.PI * 0.66) * r2);
+    ctx.arc(x, y, r2, -Math.PI * 0.66, -Math.PI * 0.34);
     ctx.stroke();
-    // Foam ring and the brighter bow wave on the upstream (lower) side.
-    ctx.globalAlpha = (o.hit ? 0.3 : 1) * (0.38 + Math.sin(t * 4 + ph) * 0.1);
-    ctx.lineWidth = 2.4;
+    // V wake: a foam line leaves each flank at the rock's widest point and opens
+    // upwards and outwards (~1.6 r long), swaying a little.
+    const sway = r * 0.08;
+    const swayL = Math.sin(t * 2.3 + ph) * sway;
+    const swayR = Math.sin(t * 2.3 + ph + 2.1) * sway;
+    const gain = 1 + 0.5 * wr;
+    for (let pass = 0; pass < 3; pass++) {
+      const u = WAKE_CUT[pass];
+      ctx.globalAlpha = fade * WAKE_ALPHA[pass] * gain;
+      ctx.lineWidth = WAKE_WIDTH[pass];
+      ctx.beginPath();
+      for (let side = -1; side <= 1; side += 2) {
+        const w = side < 0 ? swayL : swayR;
+        // Starts just outside the widest point, where the bow wave's ends sweep round to meet it.
+        const p0x = x + side * r * 1.1;
+        const p0y = y + r * 0.12;
+        const cx = x + side * r * 1.2 + w * 0.5;
+        const cy = y - r * 0.75;
+        const p2x = x + side * r * 1.78 + w;
+        const p2y = y - r * 1.4;
+        // The first `u` of the quadratic: its control point and end (de Casteljau).
+        const a = (1 - u) * (1 - u);
+        const b = 2 * u * (1 - u);
+        const e = u * u;
+        ctx.moveTo(p0x, p0y);
+        ctx.quadraticCurveTo(p0x + u * (cx - p0x), p0y + u * (cy - p0y), a * p0x + b * cx + e * p2x, a * p0y + b * cy + e * p2y);
+      }
+      ctx.stroke();
+    }
+    // Bow wave: a bright crescent on the upstream (lower) side, thickest in the
+    // middle (three arcs, each shorter and bolder) and wobbling a little.
+    const bw = Math.sin(t * 2.6 + ph) * 0.05;
+    ctx.globalAlpha = fade * (0.36 + Math.sin(t * 4 + ph) * 0.08);
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.arc(x, y, r * 1.16 + Math.sin(t * 3.3 + ph) * 0.8, 0, TAU);
+    ctx.arc(x, y, r * 1.2 + Math.sin(t * 3.3 + ph) * 0.8, Math.PI * (0.02 + bw), Math.PI * (0.98 + bw));
     ctx.stroke();
-    ctx.globalAlpha = (o.hit ? 0.3 : 1) * 0.7;
-    ctx.lineWidth = 3.4;
+    ctx.globalAlpha = fade * 0.82;
+    ctx.lineWidth = 3.6;
     ctx.beginPath();
-    ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * 0.12, Math.PI * 0.88);
+    ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * (0.1 + bw), Math.PI * (0.9 + bw));
+    ctx.stroke();
+    ctx.globalAlpha = fade * 0.4;
+    ctx.lineWidth = 5.4;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * (0.34 + bw), Math.PI * (0.66 + bw));
     ctx.stroke();
     if (wr > 0.02 && !o.hit) this.rapidsSpray(g, o, wr);
     ctx.globalAlpha = 1;
