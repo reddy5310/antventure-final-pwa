@@ -515,6 +515,37 @@ describe('layout', () => {
     for (const k of fresh.pickups) expect(fresh.player.y - k.y).toBeGreaterThan(fresh.player.y);
     expect(SPAWN_AHEAD).toBe(950);
   });
+
+  it('first shows above the top edge on tall phones too: pickups and obstacles never pop in on screen', () => {
+    for (const viewH of [800, 870, 950, 1050, 1150]) {
+      const w = newRun(21, { viewH });
+      w.player.hearts = 1e9;
+      const seenPickups = new Set<number>();
+      const seenObstacles = new Set<number>();
+      let lowestPickup = -Infinity;
+      let lowestObstacle = -Infinity;
+      // Fast-forward the river so many trails, power-ups and rock rows are laid out, not just the opening ones.
+      for (let i = 0; i < 45 / SIM_DT; i++) {
+        stepWorld(w, NONE, SIM_DT);
+        w.events.length = 0;
+        if (i % 20 === 0) w.distance += 60;
+        for (const k of w.pickups) {
+          if (seenPickups.has(k.id)) continue;
+          seenPickups.add(k.id);
+          lowestPickup = Math.max(lowestPickup, k.y);
+        }
+        for (const o of w.obstacles) {
+          if (seenObstacles.has(o.id)) continue;
+          seenObstacles.add(o.id);
+          lowestObstacle = Math.max(lowestObstacle, o.y - o.r);
+        }
+      }
+      expect(seenPickups.size, `pickups at viewH ${viewH}`).toBeGreaterThan(20);
+      // A pickup is born above the top edge (a little slack: the opening trail sits close to it on the tallest screens).
+      expect(lowestPickup, `pickup first seen at viewH ${viewH}`).toBeLessThanOrEqual(12);
+      expect(lowestObstacle, `obstacle first seen at viewH ${viewH}`).toBeLessThanOrEqual(0);
+    }
+  });
 });
 
 describe('collecting', () => {

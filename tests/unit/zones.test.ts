@@ -759,6 +759,42 @@ describe('zones in a running world', () => {
   });
 });
 
+describe('rain across a change of river speed', () => {
+  /** A boundary between Marsh and Rapids (the biggest speed step, x0.9 against x1.3) on some seed. */
+  function speedStep(): { seed: number; start: number } {
+    for (let seed = 1; seed < 80; seed++) {
+      for (let i = 1; i < 10; i++) {
+        const a = segmentZone(seed, i - 1);
+        const b = segmentZone(seed, i);
+        if ((a === 'marsh' && b === 'rapids') || (a === 'rapids' && b === 'marsh')) return { seed, start: segmentStart(seed, i) };
+      }
+    }
+    throw new Error('no Marsh/Rapids boundary in the first 80 seeds');
+  }
+
+  it('aimed drops land on the leaf row they were placed for, even when the river speeds up or slows down under them', () => {
+    // Aimed drops are meant to land within a few units of the leaf's row. A spawn that assumed today's speed
+    // for its whole fall would land metres off if the speed changed on the way.
+    const { seed, start } = speedStep();
+    const w = placeAt(seed, start - 6 * U);
+    const row = new Map<number, number>();
+    let aimed = 0;
+    for (let i = 0; i < 14 / SIM_DT; i++) {
+      stepWorld(w, NONE, SIM_DT);
+      w.player.invuln = 60;
+      for (const d of w.drops) if (d.aimed) row.set(d.id, d.y - w.player.y);
+      w.events.length = 0;
+    }
+    for (const v of row.values()) {
+      aimed++;
+      // +-6 is the aim spread; the rest is one step of drift and rounding.
+      expect(Math.abs(v)).toBeLessThan(9.5);
+    }
+    expect(aimed).toBeGreaterThan(4);
+    expect(zoneAt(seed, w.distance, sample).index).toBeGreaterThan(zoneAt(seed, start - 6 * U, sample).index);
+  });
+});
+
 describe('determinism with zones', () => {
   const fingerprint = (w: World) => {
     const r = (v: number) => Math.round(v * 1e6) / 1e6;
