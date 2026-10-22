@@ -10,6 +10,7 @@ import { animate, type UIEnv } from '../env';
 import { fmtInt, fmtMeters, fmtTime, plural } from '../format';
 import { icon, type IconName } from '../icons';
 import { canShareFiles, prepareShareCard, shareRun, type ShareContext } from '../share';
+import { buildRewards, rewardsAnnouncement } from './rewards';
 
 const COUNT_MS = 950;
 /** Draw the share card once the count-up is over, so it never costs a dropped frame there. */
@@ -152,13 +153,14 @@ export class GameOverScreen {
       { class: 'screen screen-over scrim', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'over-title' },
       h(
         'div',
-        { class: `panel screen-panel over-panel${info.isBest ? ' is-best' : ''}${daily ? ' is-daily' : ''}` },
+        { class: `panel screen-panel over-panel${info.isBest ? ' is-best' : ''}${daily ? ' is-daily' : ''}${info.meta ? ' has-rewards' : ''}` },
         h('p', { class: 'eyebrow' }, daily ? icon('calendar', 'icon eyebrow-icon') : null, eyebrow),
         h('h2', { class: `screen-title over-title${this.title().length > 10 ? ' is-long' : ''}`, id: 'over-title' }, this.title()),
         scoreBlock,
         h('div', { class: 'over-badges' }, this.badgeEl, this.buildDelta()),
         stats,
         extras,
+        info.meta ? buildRewards(info.meta) : null,
         h('p', { class: 'over-tip' }, icon('sparkle', 'icon over-tip-icon'), h('span', null, tipFor(s))),
         this.buildBoard(),
         actions,
@@ -312,6 +314,7 @@ export class GameOverScreen {
     if (summary.crumbs > 0) text += ` ${plural(summary.crumbs, 'crumb')} collected.`;
     if (isBest) text += ' New best!';
     else if (rank) text += ` Number ${rank} on your board.`;
+    if (this.info.meta) text += rewardsAnnouncement(this.info.meta);
     return text;
   }
 

@@ -138,7 +138,19 @@ export function buildHelp(env: UIEnv, close: () => void): { body: HTMLElement; f
     ),
   );
 
-  const rules = [...RULES.map(ruleCard), ruleCard(CRUMB_RULE), powerups, zones, ruleCard(DAILY_RULE)];
+  // Phase 3: the reasons to come back, in one short card. Skins are cosmetic, and the text says so.
+  const progress = h(
+    'section',
+    { class: 'help-card' },
+    h('h3', { class: 'help-title' }, icon('flame', 'icon help-title-icon'), 'Missions, streak, shop and badges'),
+    h(
+      'p',
+      { class: 'help-text' },
+      'Finish a run each day to grow your streak. Three fresh missions appear every day and pay crumbs. Spend crumbs in the shop on ant skins (just for looks), and earn badges for big runs.',
+    ),
+  );
+
+  const rules = [...RULES.map(ruleCard), ruleCard(CRUMB_RULE), powerups, zones, ruleCard(DAILY_RULE), progress];
 
   const keys =
     current === 'touch'

@@ -24,16 +24,9 @@ runs in the browser, installs as an app and plays offline.
 
 ## Screenshots
 
-<!--
-  Drop captures into docs/screenshots/ and uncomment the table below.
-  Suggested: 1170x2532 phone captures (title, run, game over) and one desktop shot.
-
-| Title | Run | Game over | Daily share |
-| :---: | :---: | :---: | :---: |
-| ![Title](docs/screenshots/title.png) | ![Run](docs/screenshots/run.png) | ![Game over](docs/screenshots/game-over.png) | ![Daily share](docs/screenshots/daily-share.png) |
--->
-
-_Coming soon. Screenshots will live in `docs/screenshots/`._
+| Title | Rapids (x1.4 pay) | Game over |
+| :---: | :---: | :---: |
+| ![Title screen](docs/screenshots/title.png) | ![A run in the Rapids, with crumb trails, rocks and a ladybug power-up](docs/screenshots/run.png) | ![Game over screen](docs/screenshots/game-over.png) |
 
 ## Features
 
@@ -200,8 +193,10 @@ replaces the old cache-first worker, clears its cache and reloads into v2.
 - **Phase 2 (shipped):** crumb trails, power-ups, river zones with their own
   mechanics, and a night river. Design and balance notes are in
   [`docs/phase-2/PLAN.md`](docs/phase-2/PLAN.md).
-- **Phase 3:** spend your crumbs (the wallet is already saved), plus
-  missions, skins and achievements.
+- **Phase 3 (in progress):** spend your crumbs in a shop on ant skins, keep a
+  daily streak, complete daily missions and earn achievements. The plan is in
+  [`docs/phase-3/PLAN.md`](docs/phase-3/PLAN.md); later phases are in
+  [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Leaderboards are local for now. Global boards need a server that validates
 runs, so v1's open-write database setup was retired instead of carried over.

@@ -31,12 +31,14 @@ import type {
 import { focusEl, focusables, h } from './dom';
 import type { UIEnv } from './env';
 import { Banners, Countdown, PickupHint, Pills, Toasts, Tutorial } from './feedback';
-import { fmtMeters } from './format';
+import { fmtInt, fmtMeters } from './format';
 import { Hud } from './hud';
 import { Modals } from './modal';
+import { buildBadges } from './modals/badges';
 import { buildHelp } from './modals/help';
 import { buildLeaderboard } from './modals/leaderboard';
 import { buildSettings, type SettingsModal } from './modals/settings';
+import { buildShop } from './modals/shop';
 import { ZONE_INFO } from './pickupinfo';
 import { GameOverScreen } from './screens/gameover';
 import { PauseScreen } from './screens/pause';
@@ -136,6 +138,8 @@ export class UI {
       openSettings: () => this.openSettings(),
       openLeaderboard: (tab) => this.openLeaderboard(tab),
       openHelp: () => this.openHelp(),
+      openShop: () => this.openShop(),
+      openBadges: () => this.openBadges(),
     };
 
     this.hud = new Hud(this.env);
@@ -208,9 +212,10 @@ export class UI {
     over.focusPrimary();
   }
 
-  /** STUB — the UI agent implements: a mission completed mid-run (small pill + announce). */
+  /** A mission finished mid-run: a small pill (non-blocking) and a screen-reader announcement. */
   missionComplete(mission: MissionView): void {
-    void mission;
+    this.pills.show('mission', 'Mission complete', 'check', `· +${fmtInt(mission.reward)}`, true);
+    this.announce(`Mission complete: ${mission.text}. Plus ${mission.reward} crumbs.`);
   }
 
   showTutorial(hint: TutorialHint): void {
@@ -340,6 +345,25 @@ export class UI {
   private openHelp(): void {
     const m = buildHelp(this.env, () => this.modals.closeTop());
     this.modals.open({ id: 'help', title: 'How to play', body: m.body, footer: m.footer, className: 'modal-help' });
+  }
+
+  private openShop(): void {
+    const m = buildShop(this.env);
+    this.modals.open({
+      id: 'shop',
+      title: 'Crumb shop',
+      body: m.body,
+      className: 'modal-shop',
+      onClose: () => {
+        m.destroy();
+        // Spending changed the wallet: bring the title chips up to date.
+        this.title?.setMeta(this.ctx.getMeta());
+      },
+    });
+  }
+
+  private openBadges(): void {
+    this.modals.open({ id: 'badges', title: 'Badges', body: buildBadges(this.env), className: 'modal-badges' });
   }
 
   // --- Internals ------------------------------------------------------------

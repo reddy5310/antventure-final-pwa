@@ -1,7 +1,8 @@
 // Night River darkness: everything but a pool of light around the leaf goes
 // dark. Drawn above the leaf/ant and BELOW drop telegraphs, so telegraphs are
 // always visible (a fairness rule), and rocks, pads and twigs keep a faint glowing
-// foam outline beyond the light so the course stays readable.
+// foam outline beyond the light so the course stays readable (fading with distance
+// so the far river still feels dark).
 //
 // Cost: the darkness is ONE cached offscreen radial mask (built on resize only)
 // drawn scaled around the leaf, plus four solid strips for the rest of the screen,
@@ -31,6 +32,14 @@ const MASK_PX = 256;
 const LUT_N = 64;
 /** The light sits a little ahead of the leaf: obstacles come from upstream. */
 const AHEAD = 20;
+/**
+ * Outlines fade with distance from the light beyond FAR_START units (over
+ * FAR_SPAN more) down to FAR_FLOOR of their strength: what is near enough to
+ * matter stays readable, the far river goes properly dark.
+ */
+const FAR_START = 300;
+const FAR_SPAN = 260;
+const FAR_FLOOR = 0.25;
 
 const FIREFLY_SLOT = 62;
 const CAP_SLOT = 84;
@@ -203,11 +212,13 @@ export class NightArt {
       const dx = o.x - cx;
       const dy = o.y - cy;
       // Hidden fraction at the obstacle's nearest edge to the light centre.
-      const rho = Math.max(0, Math.sqrt(dx * dx + dy * dy) - ext * 0.6) / half;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const rho = Math.max(0, dist - ext * 0.6) / half;
       const hidden = rho >= 1 ? 1 : this.lut[Math.floor(rho * LUT_N)];
       if (hidden < 0.04) continue;
+      const far = 1 - (1 - FAR_FLOOR) * smoothstep((dist - FAR_START) / FAR_SPAN);
       const shimmer = g.reduced ? 0.8 : 0.78 + 0.22 * Math.sin(t * 2.2 + o.id * 1.7);
-      const a = hidden * dark * shimmer * (o.hit ? 0.45 : 1);
+      const a = hidden * dark * shimmer * far * (o.hit ? 0.45 : 1);
       if (o.kind === 'twig') {
         g.local(o.x, o.y, o.angle);
         this.capsule(ctx, o.len, o.r + 2);
