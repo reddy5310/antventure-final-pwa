@@ -1,12 +1,14 @@
 // How to play: one illustrated card per rule, steering shown for the device
 // in use (with the others listed), plus the hotkeys.
 
+import { CRUMB_COMBO_BONUS, CRUMB_POINTS, TRAIL_BONUS } from '../../game/pickups';
 import { COMBO_CAP, COMBO_STEP, COMBO_TIME } from '../../game/tuning';
 import type { Device } from '../../types';
 import { illustration, type Illustration } from '../art';
 import { h } from '../dom';
 import type { UIEnv } from '../env';
 import { icon, type IconName } from '../icons';
+import { PICKUP_INFO, POWER_ORDER, ZONE_INFO, ZONE_ORDER } from '../pickupinfo';
 
 const DEVICES: { device: Device; iconName: IconName; label: string; how: string }[] = [
   { device: 'touch', iconName: 'touch', label: 'Touch', how: 'Drag anywhere — your thumb never covers the ant' },
@@ -39,12 +41,19 @@ const RULES: { ill: Illustration; title: string; text: string }[] = [
     title: 'Three hearts',
     text: 'After a hit you blink for a moment and can’t be hurt. Lose all three and you’re soaked.',
   },
-  {
-    ill: 'daily',
-    title: 'Daily River',
-    text: 'Everyone gets the same river today. Retry as often as you like, then share your best.',
-  },
 ];
+
+const CRUMB_RULE: { ill: Illustration; title: string; text: string } = {
+  ill: 'crumbs',
+  title: 'Follow the crumb trails',
+  text: `Each sugar crumb is +${CRUMB_POINTS} (times your multiplier) and adds ${CRUMB_COMBO_BONUS} s to a running chain. Take a whole trail for a Perfect trail bonus of +${TRAIL_BONUS}. Trails are optional, but they love to lead you somewhere risky.`,
+};
+
+const DAILY_RULE: { ill: Illustration; title: string; text: string } = {
+  ill: 'daily',
+  title: 'Daily River',
+  text: 'Everyone gets the same river today. Retry as often as you like, then share your best.',
+};
 
 const HOTKEYS: [string[], string][] = [
   [['Space', 'Enter'], 'Play / retry'],
@@ -82,14 +91,54 @@ export function buildHelp(env: UIEnv, close: () => void): { body: HTMLElement; f
     ),
   );
 
-  const rules = RULES.map((r) =>
+  const ruleCard = (r: { ill: Illustration; title: string; text: string }) =>
     h(
       'section',
       { class: 'help-card help-rule' },
       illustration(r.ill),
       h('div', { class: 'help-rule-text' }, h('h3', { class: 'help-title' }, r.title), h('p', { class: 'help-text' }, r.text)),
+    );
+
+  // Power-ups and zones are short lists: an icon badge, a name and one line each.
+  const powerups = h(
+    'section',
+    { class: 'help-card help-list-card' },
+    h('h3', { class: 'help-title' }, icon('sparkle', 'icon help-title-icon'), 'Power-up bubbles'),
+    h('p', { class: 'help-text' }, 'Rare bubbles drift down the river. Touch one to use it; none are ever required.'),
+    h(
+      'ul',
+      { class: 'help-list' },
+      POWER_ORDER.map((k) =>
+        h(
+          'li',
+          { class: 'help-item' },
+          h('span', { class: 'help-badge', 'data-kind': k }, icon(PICKUP_INFO[k].icon)),
+          h('span', { class: 'help-item-text' }, h('span', { class: 'help-item-name' }, PICKUP_INFO[k].name), h('span', { class: 'help-item-how' }, PICKUP_INFO[k].help)),
+        ),
+      ),
     ),
   );
+
+  const zones = h(
+    'section',
+    { class: 'help-card help-list-card' },
+    h('h3', { class: 'help-title' }, icon('zoneRapids', 'icon help-title-icon'), 'River zones'),
+    h('p', { class: 'help-text' }, 'The river changes as you go: expect a new zone roughly every minute.'),
+    h(
+      'ul',
+      { class: 'help-list' },
+      ZONE_ORDER.map((z) =>
+        h(
+          'li',
+          { class: 'help-item' },
+          h('span', { class: 'help-badge', 'data-zone': z }, icon(ZONE_INFO[z].icon)),
+          h('span', { class: 'help-item-text' }, h('span', { class: 'help-item-name' }, ZONE_INFO[z].name), h('span', { class: 'help-item-how' }, ZONE_INFO[z].rule)),
+        ),
+      ),
+    ),
+  );
+
+  const rules = [...RULES.map(ruleCard), ruleCard(CRUMB_RULE), powerups, zones, ruleCard(DAILY_RULE)];
 
   const keys =
     current === 'touch'

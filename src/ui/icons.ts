@@ -77,6 +77,50 @@ const PATHS = {
   rock: '<path d="M3.8 18l2.6-6.4 4.4-3.8 5.2 1.1 3.6 4.4 1 4.7z"/><path d="M10.8 7.8l1.4 4.2"/>',
   arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  // --- Phase 2: pickups. Silhouettes match the canvas bubbles (render/pickups.ts):
+  // dome and stem, hexagon and drop, round body with head, long body with wings.
+  crumb:
+    '<path d="M4.8 11.2l2.6-5.4 6.2-1.8 5 3.4 1.6 6-3.6 4.6-6.4 1.2-4.2-3.2z"/>' +
+    '<path d="M7.4 5.8l3.6 4.4 7.6-2.8M11 10.2l-.8 7.2"/>',
+  mushroom:
+    '<path d="M3.5 12.5a8.5 8 0 0 1 17 0z"/>' +
+    '<path d="M9.4 12.8v4.9a2.6 2.6 0 0 0 5.2 0v-4.9"/>' +
+    '<circle cx="8.4" cy="9.4" r="1.25" fill="currentColor" stroke="none"/>' +
+    '<circle cx="14.2" cy="8.2" r="1.5" fill="currentColor" stroke="none"/>' +
+    '<circle cx="17" cy="10.8" r=".9" fill="currentColor" stroke="none"/>',
+  honey:
+    '<path d="M12 3l7.4 4.25v8.5L12 20l-7.4-4.25v-8.5z"/>' +
+    '<path d="M12 8.2c1.8 2.2 2.9 3.5 2.9 4.9a2.9 2.9 0 0 1-5.8 0c0-1.4 1.1-2.7 2.9-4.9z" fill="currentColor" fill-opacity=".3"/>',
+  ladybug:
+    '<path d="M8.4 8.2A3.7 3.1 0 0 1 12 5.1a3.7 3.1 0 0 1 3.6 3.1"/>' +
+    '<path d="M12 8v12.2M6.2 10.2A6.6 6.6 0 0 0 5.6 13c0 3.9 2.9 7.2 6.4 7.2s6.4-3.3 6.4-7.2c0-1-.2-1.9-.6-2.8"/>' +
+    '<path d="M6.2 10.2c1.7-1.5 3.6-2.2 5.8-2.2s4.1.7 5.8 2.2M9.4 5L8 3M14.6 5L16 3"/>' +
+    '<circle cx="8.8" cy="13" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="15.2" cy="13" r="1.15" fill="currentColor" stroke="none"/>' +
+    '<circle cx="9.4" cy="17" r=".9" fill="currentColor" stroke="none"/>' +
+    '<circle cx="14.6" cy="17" r=".9" fill="currentColor" stroke="none"/>',
+  firefly:
+    '<circle cx="12" cy="6.4" r="1.6"/>' +
+    '<path d="M12 8v3.4"/>' +
+    '<ellipse cx="12" cy="15.2" rx="2.7" ry="3.5" fill="currentColor" fill-opacity=".35"/>' +
+    '<path d="M10.4 10.2C7.6 10.2 5 8.8 3.8 5.8c3.2-.4 5.6.8 6.6 3.4M13.6 10.2c2.8 0 5.4-1.4 6.6-4.4-3.2-.4-5.6.8-6.6 3.4"/>' +
+    '<path d="M12 20.4v1.6M7.6 18.8l-1.5 1M16.4 18.8l1.5 1" stroke-width="1.8"/>',
+  // --- Phase 2: zones.
+  zoneJungle:
+    '<path d="M12.2 20.5c0-4.2.2-7.2.6-9.5"/>' +
+    '<path d="M12.8 11C10.5 7.6 7.3 7 4 8.4c2-2.5 5.6-3.3 8.8-2.1"/>' +
+    '<path d="M12.8 11c2-3.4 5.2-4.4 8.2-3.4-1.5-2.4-4.9-3.2-8.2-1.6"/>' +
+    '<path d="M12.7 12.5c-2.6-.3-5 .8-6.6 3M12.9 12.5c2.6-.3 5 .8 6.6 3"/>',
+  zoneMarsh:
+    '<path d="M11.6 13.4l8-1.6A7.9 7.9 0 1 1 17.9 8.2z"/>' +
+    '<path d="M11.6 13.4l-4.4 3.2M11.6 13.4l-4.9-2.7"/>',
+  zoneRapids:
+    '<path d="M2.8 8c1.9 0 1.9-1.9 3.8-1.9S8.5 8 10.4 8s1.9-1.9 3.8-1.9S16.1 8 18 8s1.6-1.2 3.2-1.8"/>' +
+    '<path d="M2.8 13c1.9 0 1.9-1.9 3.8-1.9S8.5 13 10.4 13s1.9-1.9 3.8-1.9S16.1 13 18 13s1.6-1.2 3.2-1.8"/>' +
+    '<path d="M2.8 18c1.9 0 1.9-1.9 3.8-1.9S8.5 18 10.4 18s1.9-1.9 3.8-1.9S16.1 18 18 18s1.6-1.2 3.2-1.8"/>',
+  zoneNight:
+    '<path d="M19.6 14.6A8.2 8.2 0 1 1 9.4 4.4a6.6 6.6 0 0 0 10.2 10.2z"/>' +
+    '<path d="M17.4 3.2v3.2M15.8 4.8H19" stroke-width="1.7"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

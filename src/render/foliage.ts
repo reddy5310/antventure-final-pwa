@@ -6,10 +6,11 @@
 import { makeSprite, type Sprite } from './gfx';
 import { P } from './palette';
 import { TAU, makeRand } from './util';
+import { buildZoneFoliage, type ZoneFoliage } from './zonefoliage';
 
 type Ctx = CanvasRenderingContext2D;
 
-export interface FoliageSprites {
+export interface FoliageSprites extends ZoneFoliage {
   fern: Sprite[];
   grass: Sprite[];
   broadleaf: Sprite[];
@@ -548,6 +549,7 @@ export function buildFoliage(ppu: number): FoliageSprites {
     canopy: [canopy(ppu, 101, 120), canopy(ppu, 102, 100), canopy(ppu, 103, 136)],
     lily: [lily(ppu, 111, 0), lily(ppu, 112, 1), lily(ppu, 113, 2), lily(ppu, 114, 0)],
     petal: [petal(ppu, '#ff9cc0'), petal(ppu, P.flowerWhite), petal(ppu, '#ffc27a')],
+    ...buildZoneFoliage(ppu),
   };
 }
 

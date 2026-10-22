@@ -24,8 +24,17 @@ const TITLES: Record<HitSource, string> = {
   twig: 'Snagged by a twig!',
 };
 
+/** A trail pays off from this many crumbs: below it the run barely touched them. */
+const FEW_CRUMBS = 8;
+/** Runs shorter than this have not seen a trail often enough to judge their crumb habits. */
+const CRUMB_TIP_AFTER_S = 25;
+
 /** One line that teaches something, keyed to how this run went. */
 export function tipFor(s: RunSummary): string {
+  // A long run that never touched a crumb is leaving easy points (and chain time) on the water.
+  if (s.crumbs === 0 && s.timeS >= CRUMB_TIP_AFTER_S) {
+    return 'Crumb trails pay +10 each and add time to your chain. Steer through them!';
+  }
   // What ended the run is the most useful thing to learn from...
   if (s.killedBy === 'rock') return 'Rocks never move: line up a gap early and slide through.';
   if (s.killedBy === 'twig') return 'Twigs drift and spin: give them a leaf’s width of room.';
@@ -33,6 +42,10 @@ export function tipFor(s: RunSummary): string {
   if (s.timeS < 20 && s.nearMisses < 3) return 'Watch the shadows: when the ring closes on one, it splashes. Be outside it.';
   if (s.nearMisses >= 6 && s.maxCombo < 6) {
     return `Chain near-misses within ${COMBO_TIME} s of each other to stack the multiplier up to ×5.`;
+  }
+  // Pickups: bubbles are worth a detour when they are on the way.
+  if (s.crumbs > 0 && s.crumbs < FEW_CRUMBS && s.timeS >= CRUMB_TIP_AFTER_S) {
+    return 'Take every crumb in a trail for a Perfect trail bonus. Mushroom bubbles block a hit.';
   }
   return s.nearMisses < 5
     ? 'Only the ant counts. A gold ring means you are inside the splash: move!'
@@ -95,6 +108,22 @@ export class GameOverScreen {
       stat('clock', 'Time', fmtTime(s.timeS)),
     );
 
+    // Phase 2: what the run collected and how far down the river it got.
+    const lifetime = storage.getStats().totalCrumbs;
+    const extra = (iconName: IconName, cls: string, value: string, label: string) =>
+      h(
+        'div',
+        { class: `over-extra ${cls}` },
+        icon(iconName, 'icon over-extra-icon'),
+        h('span', { class: 'over-extra-text' }, h('span', { class: 'over-extra-value' }, value), h('span', { class: 'over-extra-label' }, label)),
+      );
+    const extras = h(
+      'div',
+      { class: 'over-extras' },
+      extra('crumb', 'is-crumbs', plural(s.crumbs, 'crumb'), lifetime > s.crumbs ? `${fmtInt(lifetime)} all-time` : 'collected'),
+      extra('zoneRapids', 'is-zones', plural(Math.max(1, s.zonesReached), 'zone'), 'reached'),
+    );
+
     this.hintEl = h('span', { class: 'btn-hint', 'aria-hidden': 'true' });
     this.retryBtn = h(
       'button',
@@ -129,6 +158,7 @@ export class GameOverScreen {
         scoreBlock,
         h('div', { class: 'over-badges' }, this.badgeEl, this.buildDelta()),
         stats,
+        extras,
         h('p', { class: 'over-tip' }, icon('sparkle', 'icon over-tip-icon'), h('span', null, tipFor(s))),
         this.buildBoard(),
         actions,

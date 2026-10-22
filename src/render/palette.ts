@@ -4,6 +4,8 @@
 // telegraphs, the ant) are separated from the scenery by luminance, not hue, so
 // they read for colour-blind players too.
 
+import type { ZoneId } from '../types';
+
 export const P = {
   // Jungle floor and foliage, darkest to lightest.
   jungleDeep: '#0a2016',
@@ -118,3 +120,80 @@ export function comboTier(combo: number): number {
 
 /** Rounded, friendly display font (loaded by the UI); system fallbacks keep text legible before it arrives. */
 export const FONT_FAMILY = '"Fredoka Variable", "Fredoka", ui-rounded, "Nunito", system-ui, sans-serif';
+
+// --- Zone looks (Lily Marsh, Rapids, Night River) -----------------------------
+
+/** A colour wash: r, g, b in 0..255 and alpha 0..1. Alpha 0 means "leave the Jungle look alone". */
+export type Tint = readonly [r: number, g: number, b: number, a: number];
+
+export const NO_TINT: Tint = [0, 0, 0, 0];
+
+/**
+ * Per-zone washes laid over the Jungle art (the Jungle is the baseline, so it
+ * has none). Washes blend across a zone transition as a vertical gradient, so
+ * the next zone's colours scroll into view before the leaf reaches them.
+ */
+export const ZONE_TINTS = {
+  /** Over the water tile (before shallows, streaks and decorations). */
+  water: {
+    jungle: NO_TINT,
+    // Brighter, greener, a touch warm: sunlit jade shallows.
+    marsh: [104, 222, 158, 0.3],
+    // Darker and bluer: deep, fast, cold water.
+    rapids: [4, 34, 62, 0.42],
+    // Deep blue-black; the darkness mask does the rest.
+    night: [6, 20, 62, 0.62],
+  },
+  /** Over the bank floor, before the plants. */
+  floor: {
+    jungle: NO_TINT,
+    marsh: [176, 214, 108, 0.3],
+    rapids: [128, 128, 120, 0.5],
+    night: [6, 14, 44, 0.5],
+  },
+  /**
+   * Over the bank plants as well, so a moonlit bank is one blue world. Only the
+   * Night needs it (the others change their plants instead), and it costs a
+   * second pass over the banks.
+   */
+  grade: {
+    jungle: NO_TINT,
+    marsh: NO_TINT,
+    rapids: NO_TINT,
+    night: [8, 16, 52, 0.34],
+  },
+} as const satisfies Record<string, Record<ZoneId, Tint>>;
+
+export const ZP = {
+  // Lily Marsh plants.
+  reed: '#68a33a',
+  reedDark: '#3b7330',
+  reedLight: '#a6d85c',
+  cattail: '#6a4222',
+  cattailLight: '#9a6a3a',
+  duckweed: '#b8e86a',
+  marshShallow: '#a8f0b4',
+  marshLip: '#5a5a2c',
+  gravel: '#7f8279',
+  gravelLight: '#c5cbc1',
+  nightBank: '#081430',
+  padRim: '#c6ef8e',
+
+  // Rapids.
+  boulderDark: '#3d4642',
+  boulder: '#68716b',
+  boulderLight: '#9aa39b',
+  boulderTop: '#c4ccc2',
+  spray: '#f4fffd',
+
+  // Night River.
+  nightMask: '#02060f',
+  nightFoam: '#bfe6ff',
+  nightFoamGlow: '#6fb4ff',
+  nightGlow: '#9fd4ff',
+  moonGlint: '#dcecff',
+  fireflyCore: '#f4ffb0',
+  fireflyGlow: '#b6ff5c',
+  glowcap: '#5ee6d0',
+  glowcapDeep: '#1f8f9b',
+} as const;

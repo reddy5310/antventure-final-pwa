@@ -47,6 +47,8 @@ export const SEG_MAX_M = 220;
 export const BLEND_M = 12;
 
 const U = UNITS_PER_METER;
+/** Distances beyond this (100 km of river) read as this far: keeps a bad input from growing the timeline forever. */
+const MAX_ZONE_D = 5_000_000;
 
 /** Numeric zone effects, blended across a transition. */
 export interface ZoneMods {
@@ -133,7 +135,8 @@ function segmentIndex(t: Timeline, d: number): number {
 /** Zone at river distance `d` (units). Allocation-free: writes into `out`. */
 export function zoneAt(seed: number, d: number, out: ZoneSample): ZoneSample {
   const t = timeline(seed);
-  const dd = Math.max(0, d);
+  // `d > 0` also turns NaN into 0.
+  const dd = d > 0 ? Math.min(d, MAX_ZONE_D) : 0;
   const i = segmentIndex(t, dd);
   const start = i === 0 ? 0 : t.ends[i - 1];
   const into = dd - start;

@@ -1,15 +1,26 @@
-// Rocks and twigs. Rock bodies are pre-rendered variants (flat-shaded, some
-// mossy, all with a wet sheen); their foam ring, bow wave and wake are drawn live
-// so they shimmer. Twigs are drawn live in a local rotated frame.
+// Rocks, lily pads and twigs. Rock bodies are pre-rendered variants (flat-shaded,
+// some mossy, all with a wet sheen); their foam ring, bow wave and wake are drawn
+// live so they shimmer, and in the Rapids they throw spray and trail long foam
+// streaks. Lily pads (Lily Marsh bumpers) are pre-rendered too: big, with a
+// notch and a pale raised rim so they read as solid-ish bumpers rather than the
+// small decorative pads, plus a soft ripple that swells when the leaf touches
+// one. Twigs are drawn live in a local rotated frame.
 
+import { LEAF_HIT_R } from '../config';
 import type { Obstacle, World } from '../types';
 import { makeSprite, type Gfx, type Sprite } from './gfx';
-import { P } from './palette';
-import { TAU, makeRand } from './util';
+import { P, ZP } from './palette';
+import { TAU, clamp01, frac, hash, makeRand } from './util';
+import { frameLook, type ZoneLook } from './zonelook';
 
 /** Reference radius the rock sprites are rendered at; scaled to each rock's r. */
 const R0 = 34;
 const VARIANTS = 6;
+/** Reference radius of the lily pad sprites (pads are 18..30 units). */
+const PAD_R0 = 30;
+const PAD_VARIANTS = 4;
+/** Spray droplets thrown off each rock in white water. */
+const SPRAY_N = 10;
 
 function rockSprite(ppu: number, seed: number): Sprite {
   const rand = makeRand(seed);
@@ -105,27 +116,133 @@ function rockSprite(ppu: number, seed: number): Sprite {
   });
 }
 
+/**
+ * A big lily pad from above: dark underside rim, glossy lime surface with a
+ * lit sheen, radial veins, a wedge notch to the stem, and a pale raised lip all
+ * round. The lip and the notch are what tell a player "bumper" at a glance.
+ */
+function padSprite(ppu: number, seed: number): Sprite {
+  const rand = makeRand(seed);
+  const notch = 0.3 + rand() * 0.16;
+  const size = PAD_R0 * 2.5;
+  const R = PAD_R0;
+  return makeSprite(size, size, ppu, (c) => {
+    const body = (r: number, ox: number, oy: number) => {
+      c.beginPath();
+      c.moveTo(ox, oy);
+      c.arc(ox, oy, r, notch / 2, TAU - notch / 2);
+      c.closePath();
+    };
+    // Underside and the soft halo that seats the pad on the water.
+    c.shadowColor = 'rgba(1, 26, 20, 0.55)';
+    c.shadowBlur = 5 * ppu;
+    c.fillStyle = P.lilyDark;
+    body(R, 0, 0);
+    c.fill();
+    c.shadowColor = 'transparent';
+    c.shadowBlur = 0;
+    // Raised lip: a pale ring just inside the edge, split by the notch.
+    c.strokeStyle = ZP.padRim;
+    c.lineWidth = R * 0.1;
+    c.lineCap = 'butt';
+    c.beginPath();
+    c.arc(0, 0, R * 0.95, notch / 2 + 0.03, TAU - notch / 2 - 0.03);
+    c.stroke();
+    // Surface.
+    c.fillStyle = seed % 2 ? P.lily : '#43964c';
+    body(R * 0.86, -R * 0.015, -R * 0.02);
+    c.fill();
+    // Lit sheen from the upper left.
+    c.save();
+    body(R * 0.86, -R * 0.015, -R * 0.02);
+    c.clip();
+    const sheen = c.createRadialGradient(-R * 0.34, -R * 0.4, 0, -R * 0.2, -R * 0.2, R * 0.95);
+    sheen.addColorStop(0, 'rgba(190, 240, 140, 0.75)');
+    sheen.addColorStop(0.5, 'rgba(140, 215, 110, 0.3)');
+    sheen.addColorStop(1, 'rgba(120, 200, 100, 0)');
+    c.fillStyle = sheen;
+    c.fillRect(-R, -R, R * 2, R * 2);
+    // Shaded lower right.
+    const shade = c.createRadialGradient(R * 0.4, R * 0.45, 0, R * 0.3, R * 0.35, R * 0.9);
+    shade.addColorStop(0, 'rgba(14, 60, 40, 0.42)');
+    shade.addColorStop(1, 'rgba(14, 60, 40, 0)');
+    c.fillStyle = shade;
+    c.fillRect(-R, -R, R * 2, R * 2);
+    c.restore();
+    // Veins fan out from the stem point.
+    c.strokeStyle = P.lilyDark;
+    c.lineWidth = 0.9;
+    c.globalAlpha = 0.7;
+    c.beginPath();
+    const veins = 9 + Math.floor(rand() * 3);
+    for (let i = 0; i < veins; i++) {
+      const a = notch / 2 + 0.22 + (i / (veins - 1)) * (TAU - notch - 0.44);
+      c.moveTo(Math.cos(a) * R * 0.1, Math.sin(a) * R * 0.1);
+      c.lineTo(Math.cos(a) * R * 0.8, Math.sin(a) * R * 0.8);
+    }
+    c.stroke();
+    c.globalAlpha = 1;
+    // The lip's inner shadow and the notch's cut edges.
+    c.strokeStyle = 'rgba(10, 50, 34, 0.5)';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.arc(0, 0, R * 0.855, notch / 2 + 0.05, TAU - notch / 2 - 0.05);
+    c.stroke();
+    c.strokeStyle = ZP.padRim;
+    c.lineWidth = 1.3;
+    c.beginPath();
+    c.moveTo(Math.cos(notch / 2) * R * 0.95, Math.sin(notch / 2) * R * 0.95);
+    c.lineTo(0, 0);
+    c.lineTo(Math.cos(-notch / 2) * R * 0.95, Math.sin(-notch / 2) * R * 0.95);
+    c.stroke();
+    // A few dew drops and a nibbled speck or two for character.
+    c.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    for (let i = 0; i < 3; i++) {
+      const a = Math.PI * (0.7 + rand() * 0.9);
+      const d = R * (0.25 + rand() * 0.4);
+      c.beginPath();
+      c.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1.7, 1.2, a, 0, TAU);
+      c.fill();
+    }
+    c.fillStyle = 'rgba(8, 40, 28, 0.55)';
+    for (let i = 0; i < 2; i++) {
+      const a = Math.PI * (0.2 + rand() * 1.5);
+      const d = R * (0.3 + rand() * 0.35);
+      c.beginPath();
+      c.arc(Math.cos(a) * d, Math.sin(a) * d, 1 + rand() * 0.9, 0, TAU);
+      c.fill();
+    }
+  });
+}
+
 export class ObstacleArt {
   private rocks: Sprite[] = [];
+  private pads: Sprite[] = [];
 
   build(ppu: number): void {
     this.rocks = [];
     for (let i = 0; i < VARIANTS; i++) this.rocks.push(rockSprite(ppu, 300 + i));
+    this.pads = [];
+    for (let i = 0; i < PAD_VARIANTS; i++) this.pads.push(padSprite(ppu, 400 + i));
   }
 
   draw(g: Gfx, world: World): void {
     const list = world.obstacles;
     if (!list.length) return;
-    // Water effects for all rocks first, so a neighbour's foam never paints over a rock body.
+    const look = frameLook(g);
+    // Water effects for all rocks and pads first, so a neighbour's foam never paints over a body.
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
-      if (o.kind === 'rock' && this.visible(g, o)) this.rockWater(g, o);
+      if (!this.visible(g, o)) continue;
+      if (o.kind === 'rock') this.rockWater(g, o, look);
+      else if (o.kind === 'pad') this.padWater(g, o, world);
     }
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
       if (!this.visible(g, o)) continue;
       g.ctx.globalAlpha = o.hit ? 0.42 : 1;
       if (o.kind === 'rock') this.rockBody(g, o);
+      else if (o.kind === 'pad') this.padBody(g, o, world);
       else this.twig(g, o);
     }
     g.ctx.globalAlpha = 1;
@@ -136,10 +253,12 @@ export class ObstacleArt {
     return o.y > -ext && o.y < g.viewH + ext;
   }
 
-  private rockWater(g: Gfx, o: Obstacle): void {
+  private rockWater(g: Gfx, o: Obstacle, look: ZoneLook): void {
     const { ctx, t } = g;
     const { x, y, r } = o;
     const ph = o.id * 1.7;
+    // White-water weight at the rock's own spot on the river.
+    const wr = look.weightAt('rapids', g.dOfY(y));
     g.world();
     ctx.globalAlpha = o.hit ? 0.3 : 1;
     // Darker eddy around the rock.
@@ -174,7 +293,88 @@ export class ObstacleArt {
     ctx.beginPath();
     ctx.arc(x, y, r * 1.08 + 1.2 + Math.sin(t * 5 + ph) * 1.2, Math.PI * 0.12, Math.PI * 0.88);
     ctx.stroke();
+    if (wr > 0.02 && !o.hit) this.rapidsSpray(g, o, wr);
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Rocks in white water: a fatter bow wave, long foam streaks pulled out
+   * downstream and spray flung off the upstream face. Spray is a pure function
+   * of time and the rock's id, so there is no state to keep.
+   */
+  private rapidsSpray(g: Gfx, o: Obstacle, wr: number): void {
+    const { ctx, t } = g;
+    const { x, y, r } = o;
+    ctx.strokeStyle = ZP.spray;
+    ctx.lineCap = 'round';
+    // Fatter bow wave.
+    ctx.globalAlpha = 0.5 * wr;
+    ctx.lineWidth = 3 + 2.4 * wr;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.16 + 2.6, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.stroke();
+    // Foam streaks trailing past the rock.
+    ctx.lineWidth = 2.2;
+    ctx.globalAlpha = 0.3 * wr;
+    ctx.beginPath();
+    for (let i = -1; i <= 1; i++) {
+      const sx = x + i * r * 0.62;
+      const len = r * (1.6 + 0.7 * hash(o.id, i + 1) + 0.25 * Math.sin(t * 3 + o.id + i));
+      ctx.moveTo(sx, y - r * 0.95);
+      ctx.quadraticCurveTo(sx + i * 3, y - r * 0.95 - len * 0.5, sx + i * 6, y - r * 0.95 - len);
+    }
+    ctx.stroke();
+    // Spray: two passes (young droplets bright, old ones faint) so the alpha is per batch.
+    ctx.fillStyle = ZP.spray;
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.globalAlpha = (pass ? 0.35 : 0.8) * wr;
+      ctx.beginPath();
+      for (let i = 0; i < SPRAY_N; i++) {
+        const life = frac(t * (1.5 + hash(o.id, i) * 0.7) + hash(o.id, i + 31));
+        if ((life > 0.5 ? 1 : 0) !== pass) continue;
+        const a = Math.PI * (0.06 + 0.88 * hash(o.id, i + 7));
+        const dist = r * (1.12 + 0.95 * life);
+        const px = x + Math.cos(a) * dist;
+        const py = y + Math.sin(a) * dist - Math.sin(life * Math.PI) * 7;
+        const rr = 0.9 + (1 - life) * 1.3;
+        ctx.moveTo(px + rr, py);
+        ctx.arc(px, py, rr, 0, TAU);
+      }
+      ctx.fill();
+    }
+  }
+
+  /** The water around a lily pad: a soft shadow and ripples that swell when the leaf touches it. */
+  private padWater(g: Gfx, o: Obstacle, world: World): void {
+    const { ctx, t } = g;
+    const { x, y, r } = o;
+    const touch = padTouch(o, world);
+    g.world();
+    // Shade the water beneath the pad.
+    ctx.fillStyle = 'rgba(2, 40, 30, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(x + 2, y + 3, r * 1.2, r * 1.14, 0, 0, TAU);
+    ctx.fill();
+    // Two ripples radiating outward, out of phase, so the pad always looks afloat.
+    ctx.strokeStyle = P.foam;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 2; i++) {
+      const u = g.reduced ? 0.4 + i * 0.35 : frac(t * 0.4 + o.id * 0.37 + i * 0.5);
+      ctx.globalAlpha = (1 - u) * (0.26 + 0.3 * touch);
+      ctx.beginPath();
+      ctx.arc(x, y, r * (1.08 + u * (0.42 + 0.3 * touch)), 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private padBody(g: Gfx, o: Obstacle, world: World): void {
+    const s = this.pads[Math.min(PAD_VARIANTS - 1, Math.floor(o.variant * PAD_VARIANTS))];
+    if (!s) return;
+    // The pad bobs a little on the water (not with reduced motion) and dips a
+    // hair under the leaf's weight.
+    const bob = g.reduced ? 0 : 0.012 * Math.sin(g.t * 1.4 + o.id * 2.1);
+    g.sprite(s, o.x, o.y, o.angle, (o.r / PAD_R0) * (1 + bob - 0.05 * padTouch(o, world)));
   }
 
   private rockBody(g: Gfx, o: Obstacle): void {
@@ -277,6 +477,17 @@ export class ObstacleArt {
     ctx.ellipse(len, 0, half * 0.45, half * 0.75, 0, 0, TAU);
     ctx.fill();
   }
+}
+
+/** 0..1 how far the leaf is pressing into a pad (for the ripple and dip). */
+function padTouch(o: Obstacle, world: World): number {
+  const p = world.player;
+  const dx = p.x - o.x;
+  const dy = p.y - o.y;
+  const reach = o.r + LEAF_HIT_R;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= reach * reach) return 0;
+  return clamp01((reach - Math.sqrt(d2)) / 14);
 }
 
 function twigLeaf(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, len: number): void {

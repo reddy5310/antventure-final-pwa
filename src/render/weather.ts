@@ -1,17 +1,21 @@
 // Weather and atmosphere: ambient rain streaks (two depth layers), rain
 // ripples on the water, fireflies over the banks, the storm's darkening tint and
-// vignette, lightning, and the soft scrims that keep the HUD area calm.
+// vignette, lightning, and the soft scrims that keep the HUD area calm. Lily
+// Marsh adds low drifting mist over the water; the Night River hands the
+// fireflies over to night.ts, which draws them above the darkness.
 
 import { WORLD_W } from '../config';
 import type { StormPhase, World } from '../types';
 import { makeSprite, type Gfx, type Sprite } from './gfx';
 import { P } from './palette';
 import { TAU, clamp01, hash } from './util';
+import { frameLook } from './zonelook';
 
 const RAIN_N = 300;
 const RIPPLE_N = 48;
 const RIPPLE_LIFE = 0.6;
 const FIREFLY_SLOT = 70;
+const MIST_SLOT = 150;
 /** Horizontal drift per unit of fall: the wind. */
 const WIND = -0.2;
 
@@ -36,6 +40,7 @@ export class Weather {
   private glow: Sprite | null = null;
   private dark: Sprite | null = null;
   private scrim: Sprite | null = null;
+  private mist: Sprite | null = null;
 
   build(ppu: number): void {
     this.glow = makeSprite(22, 22, Math.min(ppu, 2), (c) => {
@@ -56,6 +61,16 @@ export class Weather {
       g.addColorStop(1, 'rgba(2, 8, 14, 0.95)');
       c.fillStyle = g;
       c.fillRect(-64, -64, 128, 128);
+    });
+    // Mist: a soft, wide puff (low resolution on purpose: it is a blur).
+    this.mist = makeSprite(120, 80, 1, (c) => {
+      c.scale(1, 0.667);
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, 60);
+      g.addColorStop(0, 'rgba(225, 255, 236, 0.5)');
+      g.addColorStop(0.45, 'rgba(210, 250, 226, 0.22)');
+      g.addColorStop(1, 'rgba(200, 245, 220, 0)');
+      c.fillStyle = g;
+      c.fillRect(-60, -60, 120, 120);
     });
     this.scrim = makeSprite(4, 64, 1, (c) => {
       const g = c.createLinearGradient(0, -32, 0, 32);
@@ -159,12 +174,12 @@ export class Weather {
     ctx.globalAlpha = 1;
   }
 
-  /** Fireflies over the banks; they hide as the storm builds. */
+  /** Fireflies over the banks; they hide as the storm builds, and at night (night.ts has its own, above the dark). */
   drawFireflies(g: Gfx, world: World): void {
     const glow = this.glow;
     if (!glow) return;
     const calm = 1 - clamp01(world.intensity);
-    const vis = calm * calm * (world.state === 'attract' ? 1 : 0.8);
+    const vis = calm * calm * (world.state === 'attract' ? 1 : 0.8) * (1 - clamp01(world.darkness));
     if (vis < 0.03) return;
     const { ctx } = g;
     const seed = world.seed;
@@ -191,8 +206,44 @@ export class Weather {
     ctx.globalAlpha = 1;
   }
 
+  /**
+   * Lily Marsh mist: slow low puffs over the water that scroll with the river,
+   * thickest where the Marsh is fully in. Above the water and banks, below every
+   * hazard and the leaf, so it only ever softens the scenery.
+   */
+  private drawMist(g: Gfx, world: World): void {
+    const mist = this.mist;
+    const look = frameLook(g);
+    if (!mist || !look.involves('marsh')) return;
+    const { ctx } = g;
+    const seed = world.seed;
+    const dBot = g.dist + g.py - g.viewH - 140;
+    const dTop = g.dist + g.py + 140;
+    const k0 = Math.floor(dBot / MIST_SLOT);
+    const k1 = Math.ceil(dTop / MIST_SLOT);
+    for (let k = k0; k <= k1; k++) {
+      const wm = look.weightAt('marsh', k * MIST_SLOT);
+      if (wm <= 0) continue;
+      for (let j = 0; j < 2; j++) {
+        const h = hash(seed ^ 0x3157, k, j);
+        if (h > 0.85 * wm) continue;
+        const y = g.yOfD(k * MIST_SLOT + hash(seed ^ 0x3158, k, j) * MIST_SLOT);
+        if (y < -90 || y > g.viewH + 90) continue;
+        const l = g.leftAt(y);
+        const r = g.rightAt(y);
+        const ph = hash(seed ^ 0x3159, k, j) * TAU;
+        const x = l + (r - l) * hash(seed ^ 0x315a, k, j) + (g.reduced ? 0 : Math.sin(g.t * 0.08 + ph) * 26);
+        const breathe = g.reduced ? 0.8 : 0.75 + 0.25 * Math.sin(g.t * 0.2 + ph * 1.7);
+        ctx.globalAlpha = (0.2 + 0.2 * hash(seed ^ 0x315b, k, j)) * breathe * wm;
+        g.sprite(mist, x, y, 0, 1.5 + 1.3 * hash(seed ^ 0x315c, k, j));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
   /** Storm darkening, applied to the environment before gameplay elements so they pop. */
   drawTint(g: Gfx, world: World): void {
+    this.drawMist(g, world);
     if (!this.dark) return;
     const { ctx } = g;
     g.screen();

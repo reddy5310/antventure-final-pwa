@@ -11,12 +11,13 @@
 import { MAX_HEARTS, UNITS_PER_METER } from '../config';
 // Shared with the canvas near-miss text so both heat up at the same chain lengths.
 import { comboTier } from '../render/palette';
-import type { GameEvent, World } from '../types';
+import type { ActivePower, GameEvent, PowerKind, World } from '../types';
 import { heartSvg } from './art';
 import { h } from './dom';
 import { animate, type UIEnv } from './env';
 import { fmtInt, fmtMeters, fmtMult } from './format';
-import { icon } from './icons';
+import { icon, svgFrom } from './icons';
+import { POWER_NAME } from './pickupinfo';
 
 /** Combo timer bar resolution: 200 steps is smoother than the eye needs. */
 const BAR_STEPS = 200;
@@ -26,6 +27,11 @@ const CLOSE_TO_BEST_PTS = 150;
 const CLOSE_TO_BEST_SHARE = 0.15;
 /** How long a broken chain stays on the meter. */
 const LOST_MS = 1100;
+/** Power-up ring resolution: 72 steps is smooth over a 12 s timer and cheap to diff. */
+const RING_STEPS = 72;
+const RING_OFFSETS: string[] = Array.from({ length: RING_STEPS + 1 }, (_, i) => String(100 - (i / RING_STEPS) * 100));
+/** A power-up blinks for its last seconds so a shield never vanishes unnoticed. */
+const ENDING_S = 2;
 
 const SHAKE: Keyframe[] = [
   { transform: 'translateX(0)' },
@@ -50,12 +56,42 @@ const POP: Keyframe[] = [
   { transform: 'scale(1.25)', offset: 0.5 },
   { transform: 'scale(1)', opacity: 1 },
 ];
+// A healed heart pops up from nothing with a warm flash.
+const HEART_GAIN: Keyframe[] = [
+  { transform: 'scale(0.2) rotate(14deg)', filter: 'brightness(2.4)', opacity: 0.2 },
+  { transform: 'scale(1.6) rotate(-8deg)', filter: 'brightness(1.8)', opacity: 1, offset: 0.5 },
+  { transform: 'scale(1) rotate(0)', filter: 'none', opacity: 1 },
+];
+const GAIN_OPTS: KeyframeAnimationOptions = { duration: 640, easing: 'cubic-bezier(.34,1.56,.64,1)' };
 const SHAKE_OPTS: KeyframeAnimationOptions = { duration: 380, easing: 'ease-out' };
 const BREAK_OPTS: KeyframeAnimationOptions = { duration: 520, easing: 'cubic-bezier(.2,.8,.2,1)' };
 const PULSE_OPTS: KeyframeAnimationOptions = { duration: 220, easing: 'ease-out' };
 const POP_OPTS: KeyframeAnimationOptions = { duration: 260, easing: 'cubic-bezier(.34,1.56,.64,1)' };
 
 type BestState = 'none' | 'chase' | 'close' | 'beat';
+
+/** One fixed slot per timed power-up, so icons keep their place while others come and go. */
+const POWER_KINDS: readonly PowerKind[] = ['mushroom', 'honey', 'firefly'];
+
+interface PowerSlot {
+  kind: PowerKind;
+  el: HTMLElement;
+  ring: SVGElement;
+  on: boolean;
+  step: number;
+  secs: number;
+  ending: boolean;
+}
+
+function ringSvg(): SVGSVGElement {
+  return svgFrom(
+    `<svg viewBox="0 0 44 44">
+      <circle class="power-ring-bg" cx="22" cy="22" r="19"/>
+      <circle class="power-ring-fg" cx="22" cy="22" r="19" pathLength="100"/>
+    </svg>`,
+    'power-ring',
+  );
+}
 
 export class Hud {
   readonly el: HTMLElement;
@@ -73,6 +109,10 @@ export class Hud {
   private distText = document.createTextNode('0 m');
   private bestEl: HTMLElement;
   private bestText = document.createTextNode('');
+  private crumbsEl: HTMLElement;
+  private crumbText = document.createTextNode('0');
+  private powersEl: HTMLElement;
+  private slots: PowerSlot[] = [];
   private fpsEl: HTMLElement;
   private fpsText = document.createTextNode('');
   private lostTimer = 0;
@@ -90,6 +130,7 @@ export class Hud {
   private meters = -1;
   private best: BestState | '' = '';
   private bestNum = -1;
+  private crumbs = -1;
   private fps = -1;
   private showFps: boolean | null = null;
   private canPause: boolean | null = null;
@@ -106,10 +147,17 @@ export class Hud {
       icon('crown', 'icon hud-chip-icon'),
       h('span', null, this.bestText),
     );
+    this.crumbsEl = h(
+      'div',
+      { class: 'hud-chip hud-crumbs', title: 'Crumbs collected this run' },
+      icon('crumb', 'icon hud-chip-icon'),
+      h('span', null, this.crumbText),
+    );
     const chips = h(
       'div',
       { class: 'hud-chips' },
       h('div', { class: 'hud-chip hud-dist' }, icon('up', 'icon hud-chip-icon'), h('span', null, this.distText)),
+      this.crumbsEl,
       this.bestEl,
     );
 
@@ -137,7 +185,18 @@ export class Hud {
       icon('pause'),
     );
     this.fpsEl = h('div', { class: 'hud-fps', hidden: true }, this.fpsText);
-    const right = h('div', { class: 'hud-right' }, this.pauseBtn, this.fpsEl);
+    for (const kind of POWER_KINDS) {
+      const ring = ringSvg();
+      const el = h(
+        'span',
+        { class: 'power', 'data-kind': kind, role: 'img', 'aria-label': POWER_NAME[kind], hidden: true },
+        ring,
+        icon(kind, 'icon power-icon'),
+      );
+      this.slots.push({ kind, el, ring: ring.querySelector('.power-ring-fg') as SVGElement, on: false, step: -1, secs: -1, ending: false });
+    }
+    this.powersEl = h('div', { class: 'hud-powers', role: 'group', 'aria-label': 'Active power-ups', hidden: true }, this.slots.map((sl) => sl.el));
+    const right = h('div', { class: 'hud-right' }, this.pauseBtn, this.powersEl, this.fpsEl);
 
     this.el = h('div', { class: 'hud', hidden: true }, h('div', { class: 'hud-bar' }, this.heartsEl, chips, center, right));
   }
@@ -155,6 +214,9 @@ export class Hud {
     this.meters = -1;
     this.best = '';
     this.bestNum = -1;
+    this.crumbs = -1;
+    for (const sl of this.slots) this.hideSlot(sl);
+    this.powersEl.hidden = true;
     this.fps = -1;
     this.showFps = null;
     this.canPause = null;
@@ -216,6 +278,12 @@ export class Hud {
     }
     this.updateBest(w, score);
 
+    if (w.crumbs !== this.crumbs) {
+      this.crumbs = w.crumbs;
+      this.crumbText.data = fmtInt(w.crumbs);
+    }
+    this.updatePowers(w.powers);
+
     const canPause = w.state === 'running';
     if (canPause !== this.canPause) {
       // Nothing to pause once the ant is down: the game-over screen is a second away.
@@ -248,6 +316,19 @@ export class Hud {
         break;
       case 'combo-lost':
         this.showLost(e.combo);
+        break;
+      case 'pickup':
+        if (e.kind === 'crumb') animate(this.env, this.crumbsEl, PULSE, PULSE_OPTS);
+        break;
+      case 'power-start': {
+        // A refreshed timer pops again: the player sees the pickup landed.
+        const slot = this.slotOf(e.kind);
+        if (slot.on) animate(this.env, slot.el, POP, POP_OPTS);
+        break;
+      }
+      case 'heal':
+        // Show the new heart now (this runs before the frame's HUD update) and pop it.
+        this.setHearts(e.hearts);
         break;
       default:
         break;
@@ -287,11 +368,65 @@ export class Hud {
       const el = this.heartEls[i];
       el.classList.toggle('is-full', full);
       el.classList.toggle('is-lost', !full);
-      // Animate only the heart(s) just lost, not the initial fill.
+      // Animate only the heart(s) just lost or won, not the initial fill.
       if (!full && prev > i) animate(this.env, el, HEART_BREAK, BREAK_OPTS);
+      else if (full && prev >= 0 && prev <= i) animate(this.env, el, HEART_GAIN, GAIN_OPTS);
     }
     this.heartsEl.classList.toggle('is-last', hearts === 1);
     this.heartsEl.setAttribute('aria-label', `${hearts} of ${MAX_HEARTS} hearts`);
+  }
+
+  private slotOf(kind: PowerKind): PowerSlot {
+    return this.slots[kind === 'mushroom' ? 0 : kind === 'honey' ? 1 : 2];
+  }
+
+  /** Radial timers for the running power-ups. Cheap when nothing changed: a few compares. */
+  private updatePowers(list: readonly ActivePower[]): void {
+    let active = 0;
+    for (let i = 0; i < list.length; i++) {
+      const pw = list[i];
+      const sl = this.slotOf(pw.kind);
+      active++;
+      if (!sl.on) {
+        sl.on = true;
+        sl.el.hidden = false;
+        animate(this.env, sl.el, POP, POP_OPTS);
+      }
+      const frac = pw.total > 0 ? Math.min(1, Math.max(0, pw.left / pw.total)) : 0;
+      const step = Math.round(frac * RING_STEPS);
+      if (step !== sl.step) {
+        sl.step = step;
+        sl.ring.style.strokeDashoffset = RING_OFFSETS[step];
+      }
+      const ending = pw.left <= ENDING_S;
+      if (ending !== sl.ending) {
+        sl.ending = ending;
+        sl.el.classList.toggle('is-ending', ending);
+      }
+      const secs = Math.ceil(pw.left);
+      if (secs !== sl.secs) {
+        sl.secs = secs;
+        sl.el.setAttribute('aria-label', `${POWER_NAME[sl.kind]}, ${secs} s left`);
+      }
+    }
+    // Expired (or a new run): hide what is no longer in the list.
+    for (const sl of this.slots) {
+      if (!sl.on) continue;
+      let still = false;
+      for (let i = 0; i < list.length; i++) if (list[i].kind === sl.kind) still = true;
+      if (!still) this.hideSlot(sl);
+    }
+    const any = active > 0;
+    if (this.powersEl.hidden === any) this.powersEl.hidden = !any;
+  }
+
+  private hideSlot(sl: PowerSlot): void {
+    sl.on = false;
+    sl.step = -1;
+    sl.secs = -1;
+    sl.ending = false;
+    sl.el.hidden = true;
+    sl.el.classList.remove('is-ending');
   }
 
   /** Score pace against the board's best score: the same metric the boards rank by. */

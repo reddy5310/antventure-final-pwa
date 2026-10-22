@@ -3,6 +3,26 @@
 import { LEAF_H, LEAF_W } from '../config';
 import type { Obstacle } from '../types';
 
+/** Rocks and lily pads are circles (pads are only ever bumpers); twigs are capsules. */
+export function isRound(o: Obstacle): boolean {
+  return o.kind !== 'twig' || o.len <= 0;
+}
+
+/** Half the obstacle's size along its longest axis, not counting the circle that touches it: o.r for round ones, len + r for twigs. */
+export function obstacleExtent(o: Obstacle): number {
+  return isRound(o) ? o.r : o.len + o.r;
+}
+
+/**
+ * How far sideways from a round obstacle's centre a circle of radius `rad`
+ * must be to clear it when `dy` above or below it; 0 once clear vertically.
+ */
+export function roundClearance(o: Obstacle, dy: number, rad: number): number {
+  const reach = o.r + rad;
+  const k = reach * reach - dy * dy;
+  return k > 0 ? Math.sqrt(k) : 0;
+}
+
 /** Squared distance from point (px, py) to segment (ax, ay)–(bx, by). */
 function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
   const dx = bx - ax;
@@ -15,9 +35,9 @@ function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by
   return ex * ex + ey * ey;
 }
 
-/** Closest point on an obstacle's core (rock centre or twig segment) to (px, py), written to `out`. */
+/** Closest point on an obstacle's core (rock or pad centre, or twig segment) to (px, py), written to `out`. */
 export function closestOnObstacle(o: Obstacle, px: number, py: number, out: { x: number; y: number }): void {
-  if (o.kind === 'rock' || o.len <= 0) {
+  if (isRound(o)) {
     out.x = o.x;
     out.y = o.y;
     return;
@@ -38,7 +58,7 @@ export function closestOnObstacle(o: Obstacle, px: number, py: number, out: { x:
 /** Does a circle of radius `rad` at (px, py) overlap the obstacle? */
 export function circleHitsObstacle(o: Obstacle, px: number, py: number, rad: number): boolean {
   const reach = o.r + rad;
-  if (o.kind === 'rock' || o.len <= 0) {
+  if (isRound(o)) {
     const dx = px - o.x;
     const dy = py - o.y;
     return dx * dx + dy * dy < reach * reach;

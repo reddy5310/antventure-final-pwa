@@ -31,6 +31,8 @@ const C = {
   coralDeep: '#b3122a',
   gold: '#ffc24b',
   cream: '#f4f1e8',
+  crumb: '#ffe296',
+  crumbEdge: '#5a3716',
 } as const;
 
 const HEART_D =
@@ -90,7 +92,15 @@ export function heartSvg(cls = 'heart-svg'): SVGSVGElement {
 const WATER_BG = `<rect x="1" y="1" width="94" height="70" rx="14" fill="${C.water}"/>
   <path d="M10 18c5 0 5-3 10-3s5 3 10 3M60 58c5 0 5-3 10-3s5 3 10 3" stroke="${C.waterLight}" stroke-opacity=".4" stroke-width="2" fill="none" stroke-linecap="round"/>`;
 
-export type Illustration = 'shadows' | 'near-miss' | 'obstacles' | 'hearts' | 'daily';
+/** A sugar crumb (same faceted chunk as the canvas pickup), centred on (x, y). */
+function crumbMarkup(x: number, y: number, s: number): string {
+  return `<g transform="translate(${x} ${y}) scale(${s})">
+    <path d="M-5.5-2l3-3.6 5.4.4 3.3 3.4-1.4 4.8-4.6 2.4-4.4-1.6z" fill="${C.crumb}" stroke="${C.crumbEdge}" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M-2.5-5.2l2.4 3.8 5.7.6M-.1-1.4l-.8 5.6" stroke="#fff7d6" stroke-width=".9" stroke-linecap="round" fill="none" opacity=".85"/>
+  </g>`;
+}
+
+export type Illustration = 'shadows' | 'near-miss' | 'obstacles' | 'hearts' | 'crumbs' | 'daily';
 
 const SCENES: Record<Illustration, string> = {
   shadows: `${WATER_BG}
@@ -122,6 +132,12 @@ const SCENES: Record<Illustration, string> = {
     <g transform="translate(8 22) scale(1.15)"><path d="${HEART_D}" fill="${C.coral}" stroke="${C.coralDeep}" stroke-width="1.4"/></g>
     <g transform="translate(34 22) scale(1.15)"><path d="${HEART_D}" fill="${C.coral}" stroke="${C.coralDeep}" stroke-width="1.4"/></g>
     <g transform="translate(60 22) scale(1.15)"><path d="${HEART_D}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.6" stroke-dasharray="3 2.5"/></g>`,
+  crumbs: `${WATER_BG}
+    ${crumbMarkup(14, 14, 1)}${crumbMarkup(26, 25, 1)}${crumbMarkup(36, 38, 1)}${crumbMarkup(48, 50, 1)}${crumbMarkup(62, 58, 1)}
+    ${leafMarkup(78, 48, 0.36, 8)}
+    ${antMarkup(77, 47, 0.42)}
+    <path d="M52 15c.4 3 1.6 4.8 5 6.5-3.4 1.7-4.6 3.5-5 6.5-.4-3-1.6-4.8-5-6.5 3.4-1.7 4.6-3.5 5-6.5z" fill="${C.gold}"/>
+    <text x="60" y="26" fill="${C.gold}" font-size="13" font-weight="700" stroke="#3a2300" stroke-width="3" paint-order="stroke">+10</text>`,
   daily: `${WATER_BG}
     <rect x="26" y="12" width="44" height="48" rx="8" fill="${C.cream}" stroke="#0b1d26" stroke-width="2"/>
     <path d="M26 20a8 8 0 0 1 8-8h28a8 8 0 0 1 8 8v4H26z" fill="${C.gold}" stroke="#0b1d26" stroke-width="2"/>

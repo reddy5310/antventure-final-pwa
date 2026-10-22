@@ -3,10 +3,12 @@
 // events (except toast action buttons), so touch steering on the canvas below
 // keeps working while they are on screen.
 
-import type { Device, TutorialHint } from '../types';
+import * as storage from '../storage';
+import type { Device, PickupKind, TutorialHint, World } from '../types';
 import { h, setChildren } from './dom';
 import { animate, type UIEnv } from './env';
 import { icon, type IconName } from './icons';
+import { PICKUP_INFO } from './pickupinfo';
 import type { ToastOptions } from './ui';
 
 const OUT_MS = 200;
@@ -19,7 +21,7 @@ function dismiss(el: HTMLElement): void {
 
 // ---------------------------------------------------------------------------
 
-export type BannerKind = 'calm' | 'drizzle' | 'downpour' | 'cloudburst' | 'milestone' | 'best' | 'warn';
+export type BannerKind = 'calm' | 'drizzle' | 'downpour' | 'cloudburst' | 'zone' | 'milestone' | 'best' | 'warn';
 
 /**
  * One banner at a time, so they never stack over the river ahead of the leaf
@@ -29,11 +31,24 @@ export type BannerKind = 'calm' | 'drizzle' | 'downpour' | 'cloudburst' | 'miles
 const PRIORITY: Record<BannerKind, number> = {
   best: 4,
   warn: 3,
+  // A new zone outranks a storm change (which only waits a beat in the queue) and a milestone.
+  zone: 2.5,
   cloudburst: 2,
   downpour: 2,
   drizzle: 2,
   calm: 2,
   milestone: 1,
+};
+/** Kinds that replace each other in the queue: only the newest of a group still matters. */
+const GROUP: Record<BannerKind, string> = {
+  best: 'best',
+  warn: 'warn',
+  zone: 'zone',
+  cloudburst: 'storm',
+  downpour: 'storm',
+  drizzle: 'storm',
+  calm: 'storm',
+  milestone: 'milestone',
 };
 /** In-run banners stay short: the player is reading the river, not the UI. */
 const MAX_BANNER_MS = 1200;
@@ -47,6 +62,8 @@ interface BannerSpec {
   iconName: IconName;
   ms: number;
   sub?: string;
+  /** Extra styling hook (the zone id for zone banners). */
+  variant?: string;
   at: number;
 }
 
@@ -60,12 +77,12 @@ export class Banners {
     this.el = h('div', { class: 'banners', role: 'status', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   }
 
-  show(kind: BannerKind, text: string, iconName: IconName, ms: number, sub?: string): void {
-    const spec: BannerSpec = { kind, text, iconName, ms: Math.min(ms, MAX_BANNER_MS), sub, at: performance.now() };
+  show(kind: BannerKind, text: string, iconName: IconName, ms: number, sub?: string, variant?: string): void {
+    const spec: BannerSpec = { kind, text, iconName, ms: Math.min(ms, MAX_BANNER_MS), sub, variant, at: performance.now() };
     const cur = this.current;
     if (cur && PRIORITY[kind] < PRIORITY[cur.spec.kind]) {
       // Same kind queued twice (e.g. two storm changes): only the newer one matters.
-      this.queue = this.queue.filter((q) => PRIORITY[q.kind] !== PRIORITY[kind]);
+      this.queue = this.queue.filter((q) => GROUP[q.kind] !== GROUP[kind]);
       this.queue.push(spec);
       return;
     }
@@ -88,7 +105,7 @@ export class Banners {
     window.clearTimeout(this.nextTimer);
     const el = h(
       'div',
-      { class: `banner banner-${spec.kind}` },
+      { class: `banner banner-${spec.kind}`, 'data-zone': spec.variant },
       h('span', { class: 'banner-icon' }, icon(spec.iconName)),
       h(
         'span',
@@ -118,6 +135,108 @@ export class Banners {
     this.nextTimer = window.setTimeout(() => {
       if (!this.current) this.mount(next);
     }, GAP_MS);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+export type PillKind = 'trail' | 'block';
+
+const MAX_PILLS = 2;
+const PILL_MS = 1000;
+
+/**
+ * Small, quick confirmations ("Perfect trail!", "Blocked!") that sit under the
+ * banner slot. They are not part of the banner queue: a banner is news about the
+ * river, a pill is the answer to something the player just did, so it must not
+ * wait behind a storm warning or push one out.
+ */
+export class Pills {
+  readonly el: HTMLElement;
+
+  constructor() {
+    this.el = h('div', { class: 'pills', role: 'status', 'aria-live': 'polite', 'aria-relevant': 'additions' });
+  }
+
+  show(kind: PillKind, text: string, iconName: IconName, detail?: string): void {
+    while (this.el.children.length >= MAX_PILLS) this.el.firstElementChild?.remove();
+    const el = h(
+      'div',
+      { class: `pill pill-${kind}` },
+      icon(iconName, 'icon pill-icon'),
+      h('span', { class: 'pill-text' }, text),
+      detail ? h('span', { class: 'pill-detail' }, detail) : null,
+    );
+    this.el.appendChild(el);
+    window.setTimeout(() => dismiss(el), PILL_MS);
+  }
+
+  clear(): void {
+    this.el.replaceChildren();
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/** The first time a power-up is ever on screen, say what it does (once, then never again). */
+const HINT_MS = 2600;
+/** Visible = inside the top edge of the view (world units). */
+const HINT_TOP = 6;
+/** ...and not already past the leaf. */
+const HINT_BOTTOM = 120;
+
+const HINT_KINDS: readonly Exclude<PickupKind, 'crumb'>[] = ['mushroom', 'honey', 'ladybug', 'firefly'];
+const kindBit = (k: PickupKind): number => (k === 'mushroom' ? 1 : k === 'honey' ? 2 : k === 'ladybug' ? 4 : k === 'firefly' ? 8 : 0);
+const flagOf = (k: PickupKind): string => `seen:${k}`;
+
+export class PickupHint {
+  readonly el: HTMLElement;
+  /** Bit per kind not yet introduced; 0 once all four are known (scan is then a single compare). */
+  private unseen = 0;
+  private timer = 0;
+
+  constructor() {
+    this.el = h('div', { class: 'pk-hint', hidden: true, role: 'status', 'aria-live': 'polite' });
+    for (const k of HINT_KINDS) if (!storage.getFlag(flagOf(k))) this.unseen |= kindBit(k);
+  }
+
+  /** Called every frame while running: cheap, allocation-free. */
+  scan(w: World): void {
+    if (this.unseen === 0 || w.state !== 'running') return;
+    const list = w.pickups;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (p.taken) continue;
+      const bit = kindBit(p.kind);
+      if (!(this.unseen & bit)) continue;
+      if (p.y < HINT_TOP || p.y > w.viewH - HINT_BOTTOM) continue;
+      this.unseen &= ~bit;
+      storage.setFlag(flagOf(p.kind));
+      if (p.kind !== 'crumb') this.show(p.kind);
+      return;
+    }
+  }
+
+  hide(): void {
+    window.clearTimeout(this.timer);
+    this.el.hidden = true;
+    this.el.classList.remove('is-out');
+  }
+
+  private show(kind: Exclude<PickupKind, 'crumb'>): void {
+    const info = PICKUP_INFO[kind];
+    window.clearTimeout(this.timer);
+    setChildren(
+      this.el,
+      h('span', { class: 'pk-hint-icon', 'data-kind': kind }, icon(info.icon, 'icon')),
+      h('span', { class: 'pk-hint-text' }, h('strong', null, info.name), ` \u2014 ${info.effect}`),
+    );
+    this.el.classList.remove('is-out');
+    this.el.hidden = false;
+    this.timer = window.setTimeout(() => {
+      this.el.classList.add('is-out');
+      this.timer = window.setTimeout(() => this.hide(), OUT_MS);
+    }, HINT_MS);
   }
 }
 

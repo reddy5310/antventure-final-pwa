@@ -6,7 +6,7 @@
 
 import { FONT_FAMILY } from '../render/palette';
 import type { DailyInfo, RunSummary } from '../types';
-import { fmtInt, fmtMeters, fmtTime } from './format';
+import { fmtInt, fmtMeters, fmtTime, plural } from './format';
 
 const W = 1080;
 const H = 1350;
@@ -275,7 +275,8 @@ export async function renderShareCard(s: RunSummary, daily: DailyInfo | null, in
 
   const who = info.name ? `${info.name}` : '';
   const tries = daily && info.attempts > 1 ? `attempt ${info.attempts}` : '';
-  const byline = [who, tries].filter(Boolean).join(' · ');
+  const crumbs = s.crumbs > 0 ? plural(s.crumbs, 'crumb') : '';
+  const byline = [who, tries, crumbs].filter(Boolean).join(' · ');
   if (byline) {
     c.font = font(500, 32);
     c.fillStyle = '#e6efe9';

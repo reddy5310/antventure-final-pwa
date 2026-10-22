@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ANT_HIT_R, LEAF_HIT_R, SIM_DT } from '../../src/config';
-import { batchIsEscapable, dropHalfWidth, fairReach } from '../../src/game/fairness';
+import { obstacleExtent } from '../../src/game/collision';
+import { batchIsEscapable, dropHalfWidth, expectedTravel, fairReach, timeToRow } from '../../src/game/fairness';
 import { maxTwigLen } from '../../src/game/obstacles';
 import { leafLimits } from '../../src/game/player';
 import { riverEdgesAt } from '../../src/game/river';
 import { batchPush, simState } from '../../src/game/state';
 import { HIT_PAD, OBSTACLE_PASS } from '../../src/game/tuning';
 import { createWorld, stepWorld } from '../../src/game/world';
-import type { InputFrame, World } from '../../src/types';
+import { createZoneSample, zoneAt } from '../../src/game/zones';
+import type { InputFrame, Obstacle, World, ZoneId } from '../../src/types';
 import { createDodgeBot } from './helpers/sim';
 
 const NONE: InputFrame = { steerDelta: 0, axis: 0, absoluteX: null };
@@ -95,6 +97,22 @@ describe('escapability check', () => {
     expect(batchIsEscapable(w, st, b, 0.9, x0)).toBe(false);
   });
 
+  it('does not treat a lily pad as a wall: it only nudges, so it never makes a spawn unfair', () => {
+    // The scene of the rock test above, with the rock swapped for a pad of the same size.
+    const place = (kind: Obstacle['kind']) => {
+      const w = calmWorld(10);
+      const st = simState(w);
+      const x0 = w.player.x;
+      const b = st.batch;
+      b.n = 0;
+      batchPush(b, x0 + 4, 0, 20, 0);
+      w.obstacles.push({ id: 1, kind, x: x0 + 90, y: w.player.y - w.scrollSpeed * 0.9, r: 26, len: 0, angle: 0, spin: 0, vx: 0, variant: 0, hit: false });
+      return batchIsEscapable(w, st, b, 0.9, x0);
+    };
+    expect(place('rock')).toBe(false);
+    expect(place('pad')).toBe(true);
+  });
+
   it('splash half-widths follow the hit circle', () => {
     expect(dropHalfWidth(0, 18)).toBeGreaterThan(18 + ANT_HIT_R);
     expect(dropHalfWidth(40, 18)).toBe(0);
@@ -104,13 +122,15 @@ describe('escapability check', () => {
 describe('spawned hazards are fair by construction', () => {
   const SEEDS = [1, 2026, 777, 31337];
 
-  it('drops land on water and obstacles always leave a usable lane', () => {
+  it('drops land on water and obstacles always leave a usable lane, in every zone', () => {
+    const perZone: Record<ZoneId, number> = { jungle: 0, marsh: 0, rapids: 0, night: 0 };
     for (const seed of SEEDS) {
       const w = createWorld({ mode: 'endless', seed, dailyId: null, bestDistance: 0, viewH: 800 });
       w.player.hearts = 1e9;
       const bot = createDodgeBot();
       const seenDrops = new Set<number>();
       const seenObs = new Set<number>();
+      const sample = createZoneSample();
       for (let i = 0; i < 300 / SIM_DT; i++) {
         stepWorld(w, bot(w), SIM_DT);
         w.events.length = 0;
@@ -125,7 +145,13 @@ describe('spawned hazards are fair by construction', () => {
         }
         const fresh = w.obstacles.filter((o) => !seenObs.has(o.id));
         if (!fresh.length) continue;
-        for (const o of fresh) seenObs.add(o.id);
+        for (const o of fresh) {
+          seenObs.add(o.id);
+          zoneAt(w.seed, w.distance + (w.player.y - o.y), sample);
+          const z = sample.blend < 0.5 ? sample.zone : sample.next;
+          perZone[z]++;
+          if (o.kind === 'pad') expect(z).toBe('marsh');
+        }
         // Free leaf-centre stretch on the row of each new obstacle (twigs at their widest).
         for (const o of fresh) {
           const e = riverEdgesAt(w.seed, w.distance + (w.player.y - o.y));
@@ -134,7 +160,7 @@ describe('spawned hazards are fair by construction', () => {
           const blocks = w.obstacles
             .filter((q) => Math.abs(q.y - o.y) < 1)
             .map((q) => {
-              const rx = q.kind === 'rock' ? q.r + LEAF_HIT_R : q.len + q.r + LEAF_HIT_R;
+              const rx = obstacleExtent(q) + LEAF_HIT_R;
               return [q.x - rx, q.x + rx];
             })
             .sort((a, b) => a[0] - b[0]);
@@ -151,6 +177,8 @@ describe('spawned hazards are fair by construction', () => {
       expect(seenDrops.size).toBeGreaterThan(200);
       expect(seenObs.size).toBeGreaterThan(20);
     }
+    // The 300 s runs cross Jungle, Marsh, Rapids and Night many times over.
+    for (const z of ['jungle', 'marsh', 'rapids', 'night'] as ZoneId[]) expect(perZone[z], z).toBeGreaterThan(30);
   });
 
   it('twigs shrink as the river narrows, so a lane remains even across the middle', () => {
@@ -159,5 +187,76 @@ describe('spawned hazards are fair by construction', () => {
     const leafRange = width - 2 * (LEAF_HIT_R + 4);
     const blocked = 2 * (maxTwigLen(width) + 6 + LEAF_HIT_R);
     expect((leafRange - blocked) / 2).toBeCloseTo(OBSTACLE_PASS, 6);
+  });
+});
+
+describe('fairness while the water speeds up or slows down', () => {
+  const seed = 2026;
+  const sample = createZoneSample();
+
+  /** First distance of the first segment whose settled zone is `zone`. */
+  function segmentOf(zone: ZoneId): number {
+    for (let i = 1; i < 10; i++) {
+      let lo = 0;
+      let hi = 1_000_000;
+      for (let k = 0; k < 64; k++) {
+        const mid = (lo + hi) / 2;
+        if (zoneAt(seed, mid, sample).index >= i) hi = mid;
+        else lo = mid;
+      }
+      if (zoneAt(seed, hi + 700, sample).zone === zone) return hi;
+    }
+    throw new Error('no such zone');
+  }
+
+  /** A calm run whose leaf is `ahead` units before the start of the zone's blend. */
+  function before(zone: ZoneId, ahead: number): World {
+    const w = createWorld({ mode: 'endless', seed, dailyId: null, bestDistance: 0, viewH: 800 });
+    w.player.hearts = 1e9;
+    w.distance = segmentOf(zone) - ahead;
+    w.time = 100;
+    stepWorld(w, NONE, SIM_DT);
+    w.drops.length = 0;
+    w.obstacles.length = 0;
+    w.events.length = 0;
+    return w;
+  }
+
+  it('predicts when a rock reaches the leaf as the sim then delivers it, entering Rapids and entering the Marsh', () => {
+    let worstNaive = 0;
+    for (const zone of ['rapids', 'marsh'] as ZoneId[]) {
+      for (const lead of [0, 150]) {
+        // Out to about 2 s ahead: the sweep never looks further than a telegraph plus a pattern's stagger (~1.3 s).
+        for (const dist of [150, 300, 450]) {
+          const w = before(zone, lead);
+          const predicted = timeToRow(w, dist);
+          const naive = dist / w.scrollSpeed;
+          // A marker travelling with the river from `dist` upstream.
+          const y0 = w.player.y - dist;
+          let marker = y0;
+          let t = 0;
+          while (marker < w.player.y && t < 10) {
+            stepWorld(w, NONE, SIM_DT);
+            marker += w.scrollSpeed * SIM_DT;
+            w.drops.length = 0;
+            w.events.length = 0;
+            t += SIM_DT;
+          }
+          expect(Math.abs(predicted - t), `${zone} lead ${lead} dist ${dist}`).toBeLessThan(0.03);
+          worstNaive = Math.max(worstNaive, Math.abs(naive - t));
+        }
+      }
+    }
+    // Assuming today's speed lasts would have been off by a good part of a reaction time.
+    expect(worstNaive).toBeGreaterThan(0.08);
+  });
+
+  it('expected travel is plain speed x time on a steady stretch and grows into the Rapids', () => {
+    const calm = before('night', -1500);
+    expect(expectedTravel(calm, 1.2)).toBeCloseTo(calm.scrollSpeed * 1.2, 6);
+    const entering = before('rapids', 0);
+    expect(expectedTravel(entering, 1.2)).toBeGreaterThan(entering.scrollSpeed * 1.2 * 1.03);
+    const marsh = before('marsh', 0);
+    expect(expectedTravel(marsh, 1.2)).toBeLessThan(marsh.scrollSpeed * 1.2);
   });
 });

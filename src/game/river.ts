@@ -26,7 +26,11 @@ export function riverEdgesAt(seed: number, d: number): RiverEdges {
 export function riverEdgesInto(seed: number, d: number, out: RiverEdges): RiverEdges {
   const p = clamp(d / RIVER_NARROW_DIST, 0, 1);
   const ease = p * p * (3 - 2 * p);
-  // Lily Marsh widens the river, Rapids narrows it (blended across zone transitions).
+  // Lily Marsh widens the river, Rapids narrows it (blended across zone
+  // transitions). The bank clamps below keep it continuous and inside the view:
+  // the Marsh gets as wide as the view allows (a bank may rest against the
+  // 6-unit margin for a while, so early on it is about +9 % rather than +15 %),
+  // and the narrowest Rapids stay above 175 units, so a leaf and a lane fit.
   const zoneWidth = zoneModsAt(seed, d, widthMods).width;
   const halfWidth = (lerp(178, 128, ease) + noise1(seed ^ 0x51ed, d * 0.0021) * lerp(8, 22, ease)) * zoneWidth;
   const sway = noise1(seed ^ 0xa11ce, d * 0.0011) * lerp(6, 46, ease);
