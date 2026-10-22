@@ -77,6 +77,10 @@ export class TitleScreen {
     );
     this.setInstall(install.available, install.onInstall);
 
+    // Phase 3 buttons live in the top bar (there is no room for another row on a short phone).
+    this.shopBtn = h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Shop', title: 'Crumb shop', onclick: () => env.openShop() }, icon('shop'));
+    this.badgesBtn = h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Badges', onclick: () => env.openBadges() }, icon('medal'));
+
     const top = h(
       'div',
       { class: 'title-top' },
@@ -84,6 +88,8 @@ export class TitleScreen {
       h(
         'div',
         { class: 'title-top-group' },
+        this.shopBtn,
+        this.badgesBtn,
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Leaderboard', title: 'Leaderboard', onclick: () => env.openLeaderboard() }, icon('trophy')),
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'How to play', title: 'How to play', onclick: () => env.openHelp() }, icon('help')),
         h('button', { class: 'btn-icon', type: 'button', 'aria-label': 'Settings', title: 'Settings', onclick: () => env.openSettings() }, icon('settings')),
@@ -100,15 +106,7 @@ export class TitleScreen {
 
     this.nameSlot = h('div', { class: 'name-slot' });
     this.renderNameChip();
-    this.shopBtn = h('button', { class: 'btn-icon btn-meta', type: 'button', 'aria-label': 'Shop', title: 'Crumb shop', onclick: () => env.openShop() }, icon('shop'));
-    this.badgesBtn = h('button', { class: 'btn-icon btn-meta', type: 'button', 'aria-label': 'Badges', onclick: () => env.openBadges() }, icon('medal'));
     this.setMeta(info.meta);
-    const metaBlock = h(
-      'div',
-      { class: 'title-meta' },
-      h('div', { class: 'meta-strip' }, this.chipsSlot, h('div', { class: 'meta-btns' }, this.shopBtn, this.badgesBtn)),
-      this.missionsSlot,
-    );
 
     const best = info.endlessBest;
     this.playBtn = h(
@@ -169,9 +167,9 @@ export class TitleScreen {
       h(
         'div',
         { class: 'title-upper' },
-        h('div', { class: 'title-head' }, wordmark, this.nameSlot),
+        h('div', { class: 'title-head' }, wordmark, h('div', { class: 'title-id' }, this.nameSlot, this.chipsSlot)),
         h('div', { class: 'title-actions' }, this.playBtn, dailyBtn),
-        metaBlock,
+        this.missionsSlot,
       ),
       h('div', { class: 'title-leaf-gap', 'aria-hidden': 'true' }),
       h('footer', { class: 'title-foot' }, this.hintEl, h('p', { class: 'title-stats' }, statsLine)),
@@ -248,7 +246,7 @@ export class TitleScreen {
         'aria-label': name ? `Player name: ${name}. Edit` : 'Set your player name',
         onclick: () => this.startEdit(),
       },
-      name ? ['Playing as ', h('b', null, name)] : 'Set your name',
+      name ? [h('span', { class: 'name-prefix' }, 'Playing as '), h('b', null, name)] : 'Set your name',
       icon('edit', 'icon name-chip-icon'),
     );
     setChildren(this.nameSlot, chip);

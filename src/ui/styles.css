@@ -3371,44 +3371,36 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 /* --- Phase 3: wallet, streak, missions, shop, badges, game-over rewards ------------------- */
 
-.title-meta {
+.title-id {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  width: 100%;
+  max-width: 100%;
 }
 
-.meta-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.meta-chips,
-.meta-btns {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.title-id .name-slot {
   min-width: 0;
+  max-width: 100%;
 }
 
-.meta-btns {
-  flex: none;
+.missions-slot {
+  width: 100%;
 }
 
 .meta-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 13px 0 10px;
+  height: 38px;
+  padding: 0 12px 0 9px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--chip);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -3439,11 +3431,6 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .meta-chip.is-streak.is-idle .meta-chip-icon {
   color: var(--text-faint);
-}
-
-.btn-meta {
-  width: 44px;
-  height: 44px;
 }
 
 .missions-card {
@@ -3973,4 +3960,142 @@ html[data-input='mouse'][data-screen='run'] #game {
 
 .pill-mission .pill-text {
   color: #fff;
+}
+
+/* Phones: seven round buttons must share the top bar, and the name chip drops its
+   "Playing as" so it can sit on one line with the wallet and the streak. */
+@media (max-width: 420px) {
+  .title-top-group {
+    gap: 6px;
+  }
+
+  .name-prefix {
+    display: none;
+  }
+
+  /* With Install showing there are seven buttons across 328 px. */
+  .title-top:has(.btn-install:not([hidden])) .btn-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 340px) {
+  .title-top-group {
+    gap: 4px;
+  }
+
+  .title-top .btn-icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* Short phones (e.g. 360×640): the river's leaf needs the lower part, so the
+   title gives up its brand mark and tagline and the missions card gets slimmer. */
+@media (max-height: 680px) {
+  .title-upper {
+    gap: 8px;
+  }
+
+  .screen-home .brand-mark,
+  .screen-home .wordmark-sub {
+    display: none;
+  }
+
+  .name-prefix {
+    display: none;
+  }
+
+  .name-slot {
+    min-height: 38px;
+  }
+
+  .title-actions {
+    gap: 8px;
+  }
+
+  .btn-play {
+    min-height: 0;
+    padding-block: 8px;
+  }
+
+  .btn-play-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .daily-card {
+    min-height: 0;
+    padding-block: 8px;
+  }
+
+  .daily-badge {
+    width: 46px;
+    height: 48px;
+  }
+
+  .missions-card {
+    padding: 6px 8px 8px;
+  }
+
+  .missions-head {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+  }
+
+  .mission {
+    min-height: 26px;
+  }
+
+  .missions-list {
+    gap: 3px;
+  }
+}
+
+/* Wide screens: the title column is as tall as the window allows, so the missions
+   card moves out into the jungle gutter beside the river instead of pushing the
+   menu over the hero leaf. */
+.ui-root[data-layout='wide'] .missions-slot {
+  position: absolute;
+  top: calc(var(--safe-t) + 110px);
+  left: calc(50% + var(--u) * 200 + 28px);
+  width: min(320px, calc(var(--gw) - 56px));
+}
+
+.ui-root[data-layout='wide'] .mission {
+  min-height: 30px;
+  padding-block: 4px;
+}
+
+.ui-root[data-layout='wide'] .mission-text {
+  white-space: normal;
+}
+
+/* Landscape phones: the title is already two columns; the card goes under them. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .title-upper {
+    flex-wrap: wrap;
+  }
+
+  .missions-slot {
+    flex: 0 0 100%;
+    max-width: 420px;
+  }
+}
+
+/* Short phones: rewards earn the space the tip had, so Retry stays on screen. */
+@media (max-height: 700px) {
+  .over-panel.has-rewards .over-tip {
+    display: none;
+  }
+
+  .over-rewards {
+    margin-top: 8px;
+    padding: 6px 8px;
+  }
+
+  .rw-row {
+    padding-block: 3px;
+  }
 }
