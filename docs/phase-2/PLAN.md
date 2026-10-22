@@ -215,11 +215,45 @@ reaction) and from headless Chromium, so read them as relative, not absolute.
   crumb multiplier. At 40–90 m a crumb-chasing bot made about 19 % of its score
   from crumbs, the top of the 10–20 % target.
 - **First power-up** comes at 64–110 m, after the point where an idle player has
-  died, and two power-ups are never laid out less than 100 m apart.
+  died, and two power-ups are never laid out less than 100 m apart. The gap to
+  the next one is counted in "power-up metres" along the way (`powerGapEnd`), so
+  the Rapids' ×1.3 is really felt even though a Rapids stretch is shorter than a
+  gap: 0.63 power-ups per 100 m in the Rapids against 0.53 in the Jungle, 0.41 in
+  the Marsh and 0.45 at Night.
+- **Rapids** are rain ×0.9 and rocks ×1.25 (design: ×0.75 and ×1.4), and pay
+  **×1.4 on everything scored there** (`ZoneDef.pay`, applied through
+  `payFactor` in `scoring.ts`: distance, near-misses, crumbs, trail bonus and the
+  ladybug's points; shown as a HUD chip). Distance is only about 20 % of a
+  score, so "more metres" alone paid less per second than the Jungle while
+  costing 1.4 to 2 times the hits. Measured (strong bot, 60 seeds, 90–135 s):
+  Jungle 56 points/s at 2.8 hits/min (1192 points per hit), Rapids 73 at 3.8
+  (1146), so risk and reward now match.
+- **The first zone after the opening Jungle is Marsh or Night**, never the
+  Rapids (`FIRST_DRAW`; it reorders the bag without using the RNG, so every later
+  segment is unchanged). Before this, a third of rivers opened with the Rapids
+  at about 47 s, when a new player is at their most fragile.
+- **The zone's rain multiplier scales drop patterns as well as single drops**
+  (patterns are about 40 % of all rain). Night is rain ×1.1 (design ×0.9): with
+  perfect-vision bots it was the easiest zone, because telegraphs glow more by
+  night than by day. At 135–200 s it is now a little harder than the Jungle
+  (6.1 against 5.0 hits/min).
 - **Lily pads** (radius 18–30, no damage) are packed 1.35× denser than rocks.
-  The shove is capped at 150 u/s, well under keyboard speed, so a player can
-  always push through. A gate row in the Marsh becomes two pads, so the Marsh
-  has no rocks at all (twigs still hurt). Pads switch on at the blend's midpoint.
+  A gate row in the Marsh becomes two pads, so the Marsh has no rocks at all
+  (twigs still hurt). Pads switch on at the blend's midpoint. They are **walls
+  to the fairness sweep** (a pad shoves the leaf, so a resting spot inside its
+  reach is not one the leaf can keep), the shove is capped at 105 u/s (150 at
+  first, which carried a pad-ignoring leaf into a third of its splashes), and a
+  pad holds its shove while a splash landing within 0.4 s is in the way.
+  Measured over 52 min of Marsh: a leaf that ignores pads takes 1.45 hits/min
+  (3 % of them within 0.7 s of a bump), one that avoids them 2.2.
+- **A first-sight hint for lily pads** ("soft: they push, never hurt"), like the
+  power-ups': they look like solid obstacles, and a player who steers around every
+  one never learns otherwise. The hint timers count sim time, so a paused game
+  keeps its hint.
+- **Honey** lasts 12 s and reaches 160 units (design 9 s, 110), and the odds are
+  honey 1.8, firefly 1.4 (were 2.4 and 1.1). At 110 units the magnet paid about
+  +0.7 crumbs; now about +2.8 crumbs and +14 % score over the 25 s after pickup,
+  against +28 % for a firefly and a halved hit rate for a mushroom.
 - **Obstacle density follows the clock a living run keeps**
   (`timeAtDistanceOnRiver`, which integrates the real zone speeds), so the
   difficulty curve does not drift after the first zone change.
@@ -229,20 +263,42 @@ reaction) and from headless Chromium, so read them as relative, not absolute.
 - **Obstacles look 280 units further ahead** than before, so crumbs and
   power-ups (laid out only once the obstacle stream has passed them) first
   appear above the top edge on tall phones too.
+- **Crumbs and power-ups keep clear of drifting twigs.** A twig is laid out in
+  one place and then drifts for seconds, so a crumb placed against its birth spot
+  could end up under it (1 crumb in 100 near the leaf, a lure into a hit). The
+  layout now asks where the twig will be when the leaf gets to that row (its
+  drift start, speed and banks are fixed by the seed and the distance). The
+  opening trail, if the rocks and twigs near the start leave it too few crumbs,
+  gets one more try mirrored across the start lane.
+- **`zonesReached`** counts different zones entered alive: the river drifting on
+  under a fallen leaf reaches nothing, and meeting the Jungle twice is not five
+  of four.
+- **`setViewHeight`** re-anchors pickups at once (a rotation pauses the game, and
+  no step runs to catch them up).
 - **`wallet`** is saved next to `stats.totalCrumbs`: crumbs to spend in Phase 3.
   Nothing spends it yet.
-- **The zone stinger** is the same for every zone (the audio call carries no zone id).
+- **The zone stinger is voiced per zone** (`STINGERS` in `synth.ts`: bright
+  Marsh, rushing Rapids, hushed Night); `main.ts` passes the zone as the
+  sound's `variant`.
 
 ### Measured
 
 | Metric | Target | Result |
 |---|---|---|
-| Idle-player survival (median) | unchanged (15–25 s) | 15.5 s over 5 seeds, 16.1 s over 24; identical to Phase 1 on the same seeds |
-| Dodging-bot survival (median) | 100–160 s (Phase 1: ~127 s) | 128.5 s over 24 seeds (p25 108.8, p75 137.6); Phase 1 gave 139.1 s on the same seeds, the Rapids make Phase 2 a little harder |
-| Zones reached by the bot | 2–3 per two minutes | median 3, mean 3.2 (the bot lives about 2 min) |
-| Crumb share of a strong bot's score | 10–20 % | 17.6 % for a bot that routes for crumbs, 8 % for one that ignores them (gated by `pickups.test.ts`) |
+| Idle-player survival (median) | unchanged (15–25 s) | 14.6 s over 24 seeds, identical to Phase 1 on every one of the same seeds |
+| Dodging-bot survival (median) | 100–160 s (Phase 1: ~127 s) | 125.9 s over 24 seeds (p25 116.7, p75 147.8). A slower bot (scratch simulator, 80 seeds): 123 s at 0.35 s reaction, 76 s at 0.45 s |
+| Zones reached by the bot | 2–3 per two minutes | median 3 (the bot lives about 2 min) |
+| Crumb share of a strong bot's score | 10–20 % | 17.0 % for a bot that routes for crumbs, 9.2 % for one that ignores them (gated by `pickups.test.ts`) |
 | Power-ups seen per two-minute run | 2–3 | about 2.1 (gated by `pickups.test.ts`) |
 | Frame time, game code p95 | under 2 ms | phone 390×844 at density 2: Jungle 1.5–1.6, Night 1.6–1.9, Rapids 1.9–2.3, Marsh 2.2–2.5 ms (p50 0.8–1.3 ms) |
+
+Hits per minute at the same run time (strong bot, immortal, 60 seeds), the
+fairest comparison between zones because the difficulty rises with the clock:
+
+| Run time | Jungle | Marsh | Rapids | Night |
+|---|---|---|---|---|
+| 90–135 s | 2.8 | 0.8 | 3.8 | 1.6 |
+| 135–200 s | 5.0 | 3.9 | 7.7 | 6.1 |
 
 The frame times are rAF callback durations (simulation, render and HUD) in
 headless Chromium with software GL on a shared machine, so they overstate a
@@ -252,11 +308,23 @@ lily sprites): that is the first place to trim if a device struggles
 
 ### Known limits and follow-ups
 
-- Rapids are the hardest zone for the bot (about 5 hits a minute against 4 in
-  Jungle). If humans find them too rough, `ZONES.rapids.rocks` (1.4) is the knob.
+- Rapids are still the hardest zone (about 1.4 to 1.5 times the Jungle's hits at
+  the same run time), by design now that they pay ×1.4. About a third of strong
+  bot runs end there, because they arrive late. If humans find them too rough,
+  `ZONES.rapids.rocks` (1.25) and `.pay` are the knobs.
+- Night is mechanically close to the Jungle. Rocks and twigs keep a faint foam
+  outline beyond the pool of light; fading it beyond about 300 units would make
+  Night cost more attention, but wants a few human sessions first.
+- "Dare" trails run along a rock's edge but every crumb is still collectable from
+  clear water (a crumb is at the rock's collision edge + 8 and the pickup radius
+  is 32), so the risk of a dare comes from the rain, not the rock: a lane lure.
 - The stock test bot dodges lily pads like rocks; `createDodgeBot({ ignorePads: true })`
   behaves like a human who ignores them.
 - Crumbs are 22 units apart and the pickup radius is 32, so on a straight trail
   missing one crumb means missing its neighbours.
-- Phase 3 candidates: a zone-specific stinger, spending crumbs, missions.
-
+- The SFX (crumb pitch at streaks 7–9, the trail sparkle, the pad boing, the
+  zone stingers) were checked by reading the synth and by peak levels, not by
+  ear: a listening pass is worthwhile.
+- The balance gates in `pickups.test.ts` (crumb share 10–20 %, 1.8–3 power-ups
+  per run) are deliberate, so later obstacle or zone changes may trip them.
+- Phase 3 candidates: spending crumbs, missions.

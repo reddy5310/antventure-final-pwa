@@ -58,6 +58,9 @@ the bottom. River distance at view y is `world.distance + (player.y - y)`.
   and of what the player does. Anything that places something to land or arrive
   later (drops, obstacles) must use the speed of the zones on the way
   (`expectedTravel` in `fairness.ts`), not today's speed.
+- **Scoring.** Everything that awards points multiplies by `payFactor(world)`
+  (`scoring.ts`: the chain multiplier times the zone's `pay`), never by
+  `world.multiplier` alone, or the Rapids' bonus silently skips it.
 - **Fixed timestep.** Gameplay timing happens in sim steps (`SIM_DT`), never
   per frame.
 - **Performance.** No allocations in per-frame render or sim paths (reuse

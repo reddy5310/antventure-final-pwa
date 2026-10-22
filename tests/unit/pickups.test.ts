@@ -200,17 +200,24 @@ describe('layout', () => {
   });
 
   it('is the same on short and very tall screens (layout is by river distance)', () => {
-    const short = newRun(99, { viewH: 740 });
-    const tall = newRun(99, { viewH: 1400 });
-    const ws = lay(short, 70, scripted);
-    const wt = lay(tall, 70, scripted);
-    expect(ws.seen.length).toBeGreaterThan(20);
-    // The tall screen looks further ahead, so it has laid out at least as much;
-    // everything the short one has is identical and in the same order.
-    expect(wt.seen.length).toBeGreaterThanOrEqual(ws.seen.length);
-    expect(wt.seen.slice(0, ws.seen.length).map(({ kind, x, d, trail }) => [kind, x, d, trail])).toEqual(
-      ws.seen.map(({ kind, x, d, trail }) => [kind, x, d, trail]),
-    );
+    // Several rivers: a twig's drift is predicted for the layout, and a trail laid
+    // out before a nearby twig exists (a short screen looks less far ahead) would differ.
+    let total = 0;
+    for (const seed of [99, 1, 7, 42, 2026, 7919, 31337, 555]) {
+      const short = newRun(seed, { viewH: 740 });
+      const tall = newRun(seed, { viewH: 1400 });
+      const ws = lay(short, 70, scripted);
+      const wt = lay(tall, 70, scripted);
+      total += ws.seen.length;
+      expect(ws.seen.length, `seed ${seed}`).toBeGreaterThan(8);
+      // The tall screen looks further ahead, so it has laid out at least as much;
+      // everything the short one has is identical and in the same order.
+      expect(wt.seen.length, `seed ${seed}`).toBeGreaterThanOrEqual(ws.seen.length);
+      expect(wt.seen.slice(0, ws.seen.length).map(({ kind, x, d, trail }) => [kind, x, d, trail]), `seed ${seed}`).toEqual(
+        ws.seen.map(({ kind, x, d, trail }) => [kind, x, d, trail]),
+      );
+    }
+    expect(total).toBeGreaterThan(150);
   });
 
   it('does not depend on what the player does (idle vs a dodging bot)', () => {

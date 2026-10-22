@@ -16,7 +16,7 @@
 // makes the result the same whatever the screen height is. Rocks and pads are
 // remembered where they were born (they never move); a twig drifts sideways
 // once it is in range, so it is remembered with its drift and a pickup keeps
-// clear of where the twig will be when the leaf gets there (twigX): its
+// clear of where the twig will be when the leaf gets there (discX): its
 // start time, speed and banks are all fixed by the seed and the distance.
 //
 // Play: the leaf collects pickups it touches, crumbs score and feed the combo
@@ -104,17 +104,20 @@ const GAP_STEP = 8 * U;
 const MIN_PLACED = 3;
 
 /**
- * The furthest an obstacle laid out at distance d can reach back towards the
- * leaf: a twig's bounding circle (62 + 6) with room for a bigger pad.
- */
-const OBSTACLE_REACH = 80;
-/**
  * Extra room (units) around a twig's bounding circle for the part of its drift
  * the prediction cannot see: the leaf is on its way to a pickup for a third of
  * a second or so (~15 units of drift at the fastest twig) and the step-by-step
  * sim differs a little from the tabulated clock.
  */
 const TWIG_SLACK = 16;
+/**
+ * The furthest an obstacle laid out at distance d can reach back towards the
+ * leaf: a twig's bounding circle (62 + 6) and its slack, with room for a bigger
+ * pad. Pickups wait until the obstacle stream is this far past them, so every
+ * obstacle that could move one is already there whatever the screen height
+ * (the clearance around it, CLEAR_OBSTACLE, is added by the callers).
+ */
+const OBSTACLE_REACH = 80 + TWIG_SLACK;
 /** River distance a full trail spans, and what a power-up's search rows span. */
 const TRAIL_SPAN = (TRAIL_MAX - 1) * CRUMB_SPACING;
 const POWER_SPAN = (POWER_ROWS - 1) * POWER_ROW_STEP;

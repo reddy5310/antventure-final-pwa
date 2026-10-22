@@ -139,6 +139,38 @@ test.describe('river zones', () => {
     expect(await page.evaluate(() => (window as unknown as AntWindow).__ant.world.state)).toBe('running');
   });
 
+  test('the Rapids show their ×1.4 score bonus on the HUD, and no other zone does', async ({ page }) => {
+    const seed = await startRun(page);
+    const chip = page.locator('.hud-pay');
+    await expect(chip).toBeHidden();
+
+    const jumpTo = (d: number) =>
+      page.evaluate((to) => {
+        const w = (window as unknown as AntWindow).__ant.world;
+        w.obstacles.length = 0;
+        w.pickups.length = 0;
+        w.distance = to;
+        w.player.invuln = 60;
+        w.player.hearts = 3;
+      }, d);
+    const rapids = middleOf(seed, 'rapids');
+    await jumpTo(rapids);
+    await expect.poll(() => page.evaluate(() => (window as unknown as AntWindow).__ant.world.zone)).toBe('rapids');
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveText('×1.4');
+
+    // The next zone downstream that is not the Rapids: the chip goes away (downstream only, as the sim never goes back).
+    const out = createZoneSample();
+    let after = -1;
+    for (let m = Math.ceil(rapids / UNITS_PER_METER) + 30; m < Math.ceil(rapids / UNITS_PER_METER) + 3000 && after < 0; m += 5) {
+      zoneAt(seed, m * UNITS_PER_METER, out);
+      if (out.zone === out.next && out.zone !== 'rapids') after = m * UNITS_PER_METER;
+    }
+    expect(after).toBeGreaterThan(0);
+    await jumpTo(after);
+    await expect(chip).toBeHidden();
+  });
+
   test('the Night River keeps rain telegraphs on the canvas, brighter than the dark around them', async ({ page }) => {
     const seed = await startRun(page);
     await calmWater(page);
@@ -347,6 +379,26 @@ test.describe('power-ups', () => {
     await calmWater(page);
     await putHoney();
     await page.waitForTimeout(500);
+    await expect(hint).toBeHidden();
+  });
+
+  test('the first lily pad ever seen says it is soft, and only once', async ({ page }) => {
+    // Pads look like solid obstacles, and nothing else says they are harmless.
+    const seed = await startRun(page);
+    const hint = page.locator('.pk-hint');
+    await page.evaluate((d) => {
+      const w = (window as unknown as AntWindow).__ant.world;
+      w.obstacles.length = 0;
+      w.pickups.length = 0;
+      w.distance = d;
+      w.player.invuln = 60;
+    }, middleOf(seed, 'marsh'));
+    // The pads of the Marsh scroll into view from above.
+    await expect(hint).toContainText('Lily pads', { timeout: 15_000 });
+    expect(await page.evaluate(() => (window as unknown as AntWindow).__ant.storage.getFlag('seen:pad'))).toBe(true);
+    await expect(hint).toBeHidden({ timeout: 8_000 });
+    // More pads keep coming and the hint does not.
+    await page.waitForTimeout(2_500);
     await expect(hint).toBeHidden();
   });
 });
