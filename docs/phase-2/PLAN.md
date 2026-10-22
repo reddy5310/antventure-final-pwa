@@ -169,6 +169,29 @@ avoid merge conflicts and keep usage predictable.
 - [ ] PR description lists what changed, what was measured, and anything
       deferred.
 
+## How we run it (budget-aware)
+
+Spend the strong model where it has the most leverage (planning, specs,
+review of the risky PRs). Use the cheaper model for the bulk of the coding.
+
+1. **Plan (strong model, once).** This file, `CLAUDE.md`, and one precise
+   GitHub issue per row of the work breakdown. A precise spec is what lets a
+   cheaper model succeed on the first try.
+2. **Code (Sonnet, via GitHub Actions).** `.github/workflows/claude.yml` runs
+   `anthropics/claude-code-action@v1` with `--model sonnet` on the owner's
+   subscription token. Comment `@claude implement this issue` on the next
+   open issue, one at a time, in table order.
+3. **Verify (free).** CI (typecheck, unit tests, build, e2e) runs on every PR.
+   Merge only when green. For fixes, reply on the PR with `@claude ...`.
+4. **Review (strong model, sparingly).** Only issue 1 (contracts and
+   determinism) and issue 9 (balance) get a strong-model review.
+5. **Locally:** `/model opusplan` in Claude Code plans with Opus (Shift+Tab
+   for plan mode) and switches to Sonnet automatically for the coding.
+
+Usage hygiene: `/clear` between issues, check `/usage`, keep `CLAUDE.md`
+short, and avoid multi-agent fan-outs (Phase 1's 9-agent workflow was the
+expensive part).
+
 ## Balance targets (checked in issue 9)
 
 | Metric | Target |
