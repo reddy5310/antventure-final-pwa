@@ -193,9 +193,10 @@ replaces the old cache-first worker, clears its cache and reloads into v2.
 - **Phase 2 (shipped):** crumb trails, power-ups, river zones with their own
   mechanics, and a night river. Design and balance notes are in
   [`docs/phase-2/PLAN.md`](docs/phase-2/PLAN.md).
-- **Phase 3 (in progress):** spend your crumbs in a shop on ant skins, keep a
-  daily streak, complete daily missions and earn achievements. The plan is in
-  [`docs/phase-3/PLAN.md`](docs/phase-3/PLAN.md); later phases are in
+- **Phase 3 (shipped):** spend your crumbs in a shop on ant skins, keep a
+  daily streak, complete daily missions and earn achievements. Design and
+  economy notes are in [`docs/phase-3/PLAN.md`](docs/phase-3/PLAN.md); later
+  phases are in
   [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Leaderboards are local for now. Global boards need a server that validates

@@ -4,7 +4,8 @@ Phase 1 made the game fair and competitive, and Phase 2 made each run varied
 (zones, crumbs, power-ups, night). Phase 3 gives every session a purpose: a
 streak to keep, daily missions to finish, crumbs to spend, and badges to earn.
 
-Status: **planned, not started.** The future roadmap is in `docs/ROADMAP.md`.
+Status: **shipped** (see "As shipped" at the end). The future roadmap is in
+`docs/ROADMAP.md`.
 
 ## Ground rules
 
@@ -225,3 +226,58 @@ The templates below each have easy, medium and hard targets.
 > - Commit checkpoints after each stage. **Don't open a PR or deploy** until I
 >   say "deploy".
 > - Budget cap: +300k.
+
+## As shipped
+
+All five features landed as planned: streak, three daily missions, the crumb
+shop with six skins, 12 badges, and the Phase 2 polish. `npm run check` (216
+unit tests) and the full Playwright suite (phone and desktop) pass, with no
+e2e test changed.
+
+### What differs from the plan
+
+- **Storage API.** The plan listed `spend`, `credit`, `setSkin` and
+  `markUnlocked`. Shipped: `getMeta`, `updateMeta(fn)` (the callback returns the
+  crumbs to credit, so a run's rewards are one two-tab-safe write), `buySkin`,
+  `equipSkin` and `getWallet`. The wallet never goes negative.
+- **Mission pills.** "Finish N runs" and "Play the Daily River" only complete at
+  game over, so they have no in-run pill. A mission announced mid-run is paid
+  when the run is recorded; abandoning a live run records nothing, so that
+  mission can be completed again later.
+- **Streak milestones** are paid each time a streak reaches 3, 7, 14 or 30, so a
+  player who breaks and rebuilds a streak is paid again (each payout takes real
+  days of play).
+- **Sweet Tooth** counts lifetime `stats.totalCrumbs`, so a Phase 2 player with
+  1,000+ crumbs unlocks it on their first Phase 3 run.
+- **Title layout.** On screens up to 680 px tall the brand mark and tagline are
+  hidden so the missions card clears the river.
+- **Skins.** Bee and Golden bodies have low luminance contrast with the light
+  leaf (about 1.7:1 and 2:1). They rely on the dark outline and, for the bee, the
+  stripes. Skins never touch `ANT_HIT_R` or `LEAF_HIT_R`; a test runs the same
+  seed with every skin and compares the worlds.
+- **Dare trails** now run on a circle just outside the rock's hit radius, and any
+  dare crumb that ends up inside the hit circle is dropped, so a dare crumb never
+  costs a heart. Night outlines fade beyond about 300 units.
+
+### Economy (measured once, no new tests)
+
+- **Crumbs per run:** a bot that ignores crumbs picks up about 2 crumbs by 30 s,
+  about 4 by 60 s and about 7 by 120 s (20 seeds). A player who routes for
+  trails collects roughly two to three times that, so **about 5-20 crumbs a run**
+  and 10-15 for a typical casual run. This is under the plan's 15-35 guess,
+  because 1 crumb = 1 wallet crumb; the trail bonus pays points, not crumbs.
+- **Missions** add up to 190 a day (30 + 60 + 100). An easy and a medium one are
+  realistic on a normal day.
+- **Pacing:** the first run pays First Splash (+50) plus crumbs, so the first
+  skin (Leafcutter, 150) arrives in about 3-5 runs on day one. At about 5 runs
+  and 100-150 crumbs of missions a day, all four buyable skins (1,850 crumbs)
+  take about 10-12 days, roughly 50-60 runs, plus badge payouts. That is close
+  to the 60-80 run target, so prices stay at 150 / 400 / 400 / 900.
+
+### Deferred
+
+- Share text does not include the streak line yet.
+- A mission progress bar on the title does not move during a run, only after
+  game over.
+- Re-checking the retuned skin palettes on a real phone in daylight.
+

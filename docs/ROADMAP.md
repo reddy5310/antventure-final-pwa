@@ -4,7 +4,7 @@
 |---|---|---|
 | 1 | Modern rebuild: fair telegraphed rain, near-miss combos, Daily River, local leaderboards, installable PWA | ✅ Shipped (see README) |
 | 2 | More to chase: river zones, crumbs, power-ups, night river | ✅ Shipped (`docs/phase-2/PLAN.md`) |
-| 3 | Reasons to come back: streak, daily missions, crumb shop with skins, achievements, polish | 📋 Planned (`docs/phase-3/PLAN.md`) |
+| 3 | Reasons to come back: streak, daily missions, crumb shop with skins, achievements, polish | ✅ Shipped (`docs/phase-3/PLAN.md`) |
 | 4 | More game, still offline | 💡 Ideas |
 | 5 | Online and competitive | 💡 Ideas |
 | 6 | Reach and polish | 💡 Ideas |
